@@ -6,6 +6,7 @@
       "target_value": 3,
       "hard_limit_value": 5,
       "direction": "max",
+      "expected_unit": "percent",
       "description": "Annual price escalation must not exceed the hard maximum of 5%; 3% is the preferred target."
     },
     {
@@ -13,6 +14,7 @@
       "target_value": 60,
       "hard_limit_value": 30,
       "direction": "min",
+      "expected_unit": "days",
       "description": "Payment terms must be at least Net 30; Net 60 is the preferred target."
     },
     {
@@ -20,6 +22,7 @@
       "target_value": 30,
       "hard_limit_value": 60,
       "direction": "max",
+      "expected_unit": "days",
       "description": "Termination notice period must not exceed 60 days; 30 days is the preferred target."
     },
     {
@@ -35,6 +38,7 @@
       "target_value": 99.9,
       "hard_limit_value": 99.9,
       "direction": "min",
+      "expected_unit": "percent",
       "description": "SLA uptime must be at least 99.9%."
     },
     {
@@ -49,6 +53,7 @@
       "target_value": 30,
       "hard_limit_value": 30,
       "direction": "min",
+      "expected_unit": "days",
       "description": "Auto-renewal clauses must allow at least a 30-day cancellation window before renewal takes effect."
     }
   ]

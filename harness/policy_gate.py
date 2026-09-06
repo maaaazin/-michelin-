@@ -9,9 +9,10 @@ ADR-006/007.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 from schemas import (
     CheckStatus,
@@ -26,6 +27,16 @@ from schemas import (
 
 # ADR-006: evidence below this confidence score is never treated as fact.
 CONFIDENCE_THRESHOLD = 0.6
+
+# ADR-011: a rule with this expected_unit gets its value parsed to an
+# integer day count before comparison (see parse_duration_days below).
+DAYS_UNIT = "days"
+
+_DURATION_PATTERNS = [
+    re.compile(r"^\s*net\s*-?\s*(\d+)\s*$", re.IGNORECASE),  # "Net 30", "Net-30"
+    re.compile(r"^\s*(\d+)\s*days?\s*$", re.IGNORECASE),  # "180 days", "30 day"
+    re.compile(r"^\s*(\d+)\s*$"),  # bare "30"
+]
 
 DEFAULT_POLICY_PATH = Path(__file__).resolve().parent.parent / "data" / "policy_config.json"
 
@@ -47,6 +58,7 @@ class _ClauseGroupResult:
     blocking_status: Optional[CheckStatus]
     value: Optional[ClauseValue]
     reason: Optional[str]
+    unit: Optional[str] = None
     source_clause_ids: List[str] = field(default_factory=list)
     requires_human_signoff: bool = False
     conflicting_clauses: List[Clause] = field(default_factory=list)
@@ -102,6 +114,7 @@ def _evaluate_clause_group(clause_type: str, clauses: List[Clause]) -> _ClauseGr
         blocking_status=None,
         value=clause.vendor_value,
         reason=None,
+        unit=clause.unit,
         source_clause_ids=[clause.clause_id] if clause.clause_id else [],
     )
 
@@ -120,6 +133,38 @@ def _tie_break(direction: ComparisonDirection, values: List[ClauseValue]) -> Opt
     if direction == ComparisonDirection.MIN:
         return max(numeric_values)
     return None
+
+
+def parse_duration_days(value: ClauseValue) -> Optional[int]:
+    """Normalize a duration value ('Net 30', '180 days', or a plain
+    number) to an integer day count. Returns None if unparseable -
+    callers must treat that as CANNOT_VERIFY, not crash (ADR-011).
+    """
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return int(value)
+    if not isinstance(value, str):
+        return None
+    for pattern in _DURATION_PATTERNS:
+        match = pattern.match(value.strip())
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def _normalize_value(rule: PolicyRule, value: ClauseValue, unit: Optional[str]) -> Tuple[Optional[ClauseValue], Optional[str]]:
+    """Apply the rule's comparison strategy (ADR-011): parse durations to
+    days, or check the value's unit matches what the rule expects.
+    Returns (normalized_value, error) - error is set, value is None, on
+    failure.
+    """
+    if rule.expected_unit == DAYS_UNIT:
+        parsed = parse_duration_days(value)
+        if parsed is None:
+            return None, f"could not parse '{value}' as a day count for '{rule.clause_type}'"
+        return parsed, None
+    if rule.expected_unit and unit and unit.strip().lower() != rule.expected_unit.strip().lower():
+        return None, f"unit mismatch for '{rule.clause_type}': expected '{rule.expected_unit}', got '{unit}'"
+    return value, None
 
 
 def _compare(direction: ComparisonDirection, value: ClauseValue, limit: ClauseValue) -> bool:
@@ -249,15 +294,48 @@ def evaluate_rule(
         hard_limit = ref_group.value  # type: ignore[assignment]
         extra_source_ids = ref_group.source_clause_ids
 
+        # ADR-011: don't compare amounts in different units/currencies.
+        if group.unit and ref_group.unit and group.unit.strip().lower() != ref_group.unit.strip().lower():
+            return PolicyCheckResult(
+                clause_type=rule.clause_type,
+                status=CheckStatus.CANNOT_VERIFY,
+                checked_value=None,
+                target_value=rule.target_value,
+                hard_limit_value=rule.hard_limit_value,
+                reason=(
+                    f"Cannot compare '{rule.clause_type}' ({group.unit}) against "
+                    f"'{rule.reference_clause_type}' ({ref_group.unit}): unit mismatch."
+                ),
+                requires_human_signoff=False,
+                source_clauses=group.source_clause_ids + extra_source_ids,
+            )
+
     # A proposed move, if given, overrides the raw vendor value here -
     # this is what makes one function serve both POLICY_CHECK and
-    # POLICY_GATE (module docstring).
+    # POLICY_GATE (module docstring). Proposals carry no unit, so only
+    # duration parsing (not the unit-mismatch check) applies to them.
     value_to_check = group.value
+    value_unit = group.unit
     if proposal is not None:
         if rule.clause_type in proposal.concessions:
             value_to_check = proposal.concessions[rule.clause_type]
+            value_unit = None
         elif rule.clause_type in proposal.requested_changes:
             value_to_check = proposal.requested_changes[rule.clause_type]
+            value_unit = None
+
+    value_to_check, norm_error = _normalize_value(rule, value_to_check, value_unit)
+    if norm_error:
+        return PolicyCheckResult(
+            clause_type=rule.clause_type,
+            status=CheckStatus.CANNOT_VERIFY,
+            checked_value=None,
+            target_value=rule.target_value,
+            hard_limit_value=hard_limit,
+            reason=norm_error[0].upper() + norm_error[1:] + ".",
+            requires_human_signoff=False,
+            source_clauses=group.source_clause_ids + extra_source_ids,
+        )
 
     passed = _compare(rule.direction, value_to_check, hard_limit)
     status = CheckStatus.PASS if passed else CheckStatus.BLOCKED

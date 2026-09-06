@@ -232,3 +232,36 @@ and claude.md are updated to OpenAI. No agent has been written yet, so
 this switch costs nothing beyond doc and dependency updates — if it had
 come after agent code existed, every agent's LLM-call wrapper would have
 needed rewriting too.
+
+---
+
+## ADR-011: value normalization happens in the harness, at comparison time
+
+**Status:** Accepted
+
+**Context:** The Contract Analyst agent (built next) will emit exactly
+the value shapes a real contract produces: numbers with a unit attached
+(8, "percent"), duration text ("Net 30", "180 days"), and free text
+(data ownership). The gate needs a defined comparison strategy per
+clause type, not a bare float/str compare, before that agent exists.
+
+**Decision:** Each `PolicyRule` gets an `expected_unit` field.
+`"days"` tells the gate to parse the raw value (str or number) into an
+integer day count via `parse_duration_days()` before comparing;
+anything else with `expected_unit` set (e.g. `"percent"`) triggers a
+unit-match check against the Clause's own `unit` field, not just a
+magnitude comparison. Categorical rules (data ownership) leave
+`expected_unit` unset and use `ComparisonDirection.EQUALS`. Parsing and
+unit-checking happen in `harness/policy_gate.py` at comparison time,
+not on the `Clause` schema or at extraction time — `Clause.vendor_value`
+keeps whatever raw shape the extractor produced. An unparseable
+duration or a unit mismatch resolves to `CANNOT_VERIFY`, never a crash
+or a silent wrong-unit comparison.
+
+**Consequences:** The Contract Analyst can emit values in whatever
+literal form the contract uses, and the gate remains the single place
+that decides how to compare them. The trade-off: normalization logic
+now lives in `evaluate_rule`'s call path rather than being visible on
+the schema, so anyone adding a new duration- or unit-bearing clause
+type needs to remember to set `expected_unit` on its `PolicyRule`, not
+just add the clause_type.

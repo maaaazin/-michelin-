@@ -26,6 +26,7 @@ from harness.policy_gate import (
     CONFIDENCE_THRESHOLD,
     evaluate_rule,
     load_policy_config,
+    parse_duration_days,
     run_policy_check,
 )
 
@@ -34,6 +35,7 @@ ESCALATION_RULE = PolicyRule(
     target_value=3,
     hard_limit_value=5,
     direction=ComparisonDirection.MAX,
+    expected_unit="percent",
     description="Annual price escalation must not exceed 5%.",
 )
 
@@ -42,6 +44,7 @@ SLA_RULE = PolicyRule(
     target_value=99.9,
     hard_limit_value=99.9,
     direction=ComparisonDirection.MIN,
+    expected_unit="percent",
     description="SLA uptime must be at least 99.9%.",
 )
 
@@ -51,6 +54,24 @@ DATA_OWNERSHIP_RULE = PolicyRule(
     hard_limit_value="company",
     direction=ComparisonDirection.EQUALS,
     description="Data must remain owned by the company.",
+)
+
+PAYMENT_TERMS_RULE = PolicyRule(
+    clause_type="payment_terms_days",
+    target_value=60,
+    hard_limit_value=30,
+    direction=ComparisonDirection.MIN,
+    expected_unit="days",
+    description="Payment terms must be at least Net 30.",
+)
+
+TERMINATION_RULE = PolicyRule(
+    clause_type="termination_notice_days",
+    target_value=30,
+    hard_limit_value=60,
+    direction=ComparisonDirection.MAX,
+    expected_unit="days",
+    description="Termination notice must not exceed 60 days.",
 )
 
 LIABILITY_RULE = PolicyRule(
@@ -270,3 +291,81 @@ def test_load_policy_config_from_data_file():
 
 def test_data_file_actually_exists():
     assert (Path(__file__).resolve().parent.parent / "data" / "policy_config.json").exists()
+
+
+# --- Value normalization: the three comparison strategies (task step 2) ---
+
+
+def test_numeric_strategy_checks_unit_not_just_magnitude():
+    # Same magnitude as a passing case, but the unit is wrong for a
+    # percent-type rule - must not be silently compared as if correct.
+    clause = Clause(
+        clause_type="price_escalation",
+        vendor_value=4,
+        unit="INR",
+        source_section="4.1",
+        source_text="...4...",
+        confidence=0.9,
+    )
+    result = evaluate_rule(ESCALATION_RULE, [clause])
+    assert result.status == CheckStatus.CANNOT_VERIFY
+    assert "unit mismatch" in result.reason.lower()
+
+
+def test_duration_strategy_parses_net_terms_and_passes():
+    clause = Clause(
+        clause_type="payment_terms_days",
+        vendor_value="Net 45",
+        source_section="6.1",
+        source_text="Payment due Net 45.",
+        confidence=0.92,
+    )
+    result = evaluate_rule(PAYMENT_TERMS_RULE, [clause])
+    assert result.status == CheckStatus.PASS
+    assert result.checked_value == 45
+
+
+def test_duration_strategy_parses_days_suffix_and_blocks():
+    clause = Clause(
+        clause_type="termination_notice_days",
+        vendor_value="180 days",
+        source_section="12.1",
+        source_text="Either party may terminate with 180 days notice.",
+        confidence=0.95,
+    )
+    result = evaluate_rule(TERMINATION_RULE, [clause])
+    assert result.status == CheckStatus.BLOCKED
+    assert result.checked_value == 180
+
+
+def test_duration_strategy_malformed_string_is_cannot_verify_not_a_crash():
+    clause = Clause(
+        clause_type="payment_terms_days",
+        vendor_value="due upon receipt, terms TBD",
+        source_section="6.1",
+        source_text="Payment terms to be determined.",
+        confidence=0.8,
+    )
+    result = evaluate_rule(PAYMENT_TERMS_RULE, [clause])
+    assert result.status == CheckStatus.CANNOT_VERIFY
+    assert parse_duration_days("due upon receipt, terms TBD") is None
+
+
+def test_categorical_strategy_pass_and_blocked():
+    matching = Clause(
+        clause_type="data_ownership",
+        vendor_value="Company",
+        source_section="10.1",
+        source_text="All data remains the property of the Company.",
+        confidence=0.9,
+    )
+    assert evaluate_rule(DATA_OWNERSHIP_RULE, [matching]).status == CheckStatus.PASS
+
+    mismatched = Clause(
+        clause_type="data_ownership",
+        vendor_value="Vendor",
+        source_section="10.1",
+        source_text="All data remains the property of the Vendor.",
+        confidence=0.9,
+    )
+    assert evaluate_rule(DATA_OWNERSHIP_RULE, [mismatched]).status == CheckStatus.BLOCKED

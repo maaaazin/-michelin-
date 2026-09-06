@@ -43,6 +43,14 @@ class PolicyRule(BaseModel):
     )
     direction: ComparisonDirection
     description: str = Field(description="Human-readable explanation of the rule.")
+    expected_unit: Optional[str] = Field(
+        default=None,
+        description=(
+            "Unit the vendor's value must be in, e.g. 'percent' or "
+            "'days'. 'days' also tells the gate to parse duration text "
+            "like 'Net 30' before comparing. None for categorical rules."
+        ),
+    )
     reference_clause_type: Optional[str] = Field(
         default=None,
         description=(
