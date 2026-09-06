@@ -8,32 +8,18 @@ from typing import Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
 
-# A clause's value can be a plain number (a percentage, a day count) or
-# free text (e.g. a data-ownership clause's wording). Kept as a narrow
-# union rather than Any so validation still rejects nonsense like a list
-# or a nested object showing up where a scalar is expected.
+# A number (percentage, day count) or free text (e.g. data-ownership
+# wording). Narrower than Any so a list/object can't sneak in as a value.
 ClauseValue = Union[float, str]
 
 
 class Clause(BaseModel):
     """One extracted fact about the vendor contract.
 
-    Design choice - representing an absent clause:
-    A vendor contract that never addresses a policy-relevant clause type
-    (for example, it says nothing about data ownership) is represented
-    with ``not_specified=True``, a dedicated boolean flag, rather than a
-    magic string such as ``vendor_value="NOT_SPECIFIED"``. Two reasons:
-
-    1. ``vendor_value`` stays typed to the clause's real value (a number
-       or free text). A sentinel string could collide with a legitimate
-       text-valued clause that happens to contain that literal text.
-    2. Callers can check ``if clause.not_specified`` directly instead of
-       string-comparing a value field, which is what every downstream
-       consumer (the policy engine, agents, the UI) actually wants to do.
-
-    When ``not_specified`` is True there is no source passage to point
-    to, so ``vendor_value``, ``unit``, ``source_section`` and
-    ``source_text`` are all ``None`` - enforced by the validator below.
+    Absent clauses use ``not_specified=True`` rather than a magic
+    ``vendor_value`` string, so the value field stays typed and callers
+    can check a flag instead of string-comparing. See the validator
+    below for the None-fields invariant this implies.
     """
 
     clause_type: str = Field(

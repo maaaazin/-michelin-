@@ -1,10 +1,7 @@
 """Company negotiation policy: structured rules and per-rule check results.
 
-No business logic lives here, just data. The comparisons that decide
-PASS / BLOCKED / CANNOT_VERIFY / LOW_CONFIDENCE / CONFLICTING live in
-harness/policy_gate.py, per the project rule that deterministic checks
-belong in code, not prompts - and structurally, not mixed into the
-schema layer either (see claude.md).
+No business logic here, just data - the PASS/BLOCKED/etc. comparisons
+live in harness/policy_gate.py (see claude.md's schema-vs-harness rule).
 """
 
 from __future__ import annotations
@@ -18,17 +15,10 @@ from .clause import ClauseValue
 
 
 class ComparisonDirection(str, Enum):
-    """How a rule's hard_limit_value bounds the vendor's value.
-
-    MAX    - lower is better for the company; hard_limit_value is a
-              ceiling the vendor's value must not exceed (e.g. price
-              escalation, termination notice period).
-    MIN    - higher is better for the company; hard_limit_value is a
-              floor the vendor's value must meet or exceed (e.g. SLA
-              uptime, payment terms, liability cap).
-    EQUALS - a categorical hard constraint; the vendor's value must
-              match hard_limit_value exactly (e.g. data ownership must
-              equal "company").
+    """How hard_limit_value bounds the vendor's value: MAX is a ceiling
+    (lower is better, e.g. escalation), MIN is a floor (higher is
+    better, e.g. SLA), EQUALS is an exact categorical match (e.g. data
+    ownership).
     """
 
     MAX = "max"

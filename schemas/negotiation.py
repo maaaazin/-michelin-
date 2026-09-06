@@ -35,13 +35,9 @@ class ReviewVerdict(str, Enum):
 class NegotiationProposal(BaseModel):
     """A proposed negotiation move.
 
-    ``supporting_clauses`` must be ``clause_id`` references into
-    ``NegotiationState.extracted_clauses``, not free-text explanations -
-    the whole point of evidence grounding (see problem_statement.md) is
-    that a claim traces back to an actual Clause object. This model does
-    not itself have access to the clause list to validate the ids exist;
-    that check happens wherever a full NegotiationState is available
-    (the harness / graph), not in the schema layer.
+    supporting_clauses must be clause_id references, not free text, so
+    claims trace back to real evidence; validating the ids actually
+    exist happens in the harness, not here.
     """
 
     concessions: Dict[str, ClauseValue] = Field(

@@ -79,6 +79,13 @@ documents).
 - An agent module should never import a policy threshold and check it
   itself; it should call into `/harness` and get back a decision.
 
+### Comment style
+
+Keep code comments short: 2-3 lines max, covering the gist of what/why/how
+in one pass. This applies to docstrings too, not just inline `#` comments.
+A design choice that needs more than that belongs in decisions.md, with
+the code comment just pointing at the relevant ADR.
+
 ## Commit convention
 
 Imperative mood, one feature per commit, prefixed by type:

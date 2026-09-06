@@ -1,41 +1,9 @@
-"""The deterministic policy engine.
-
-Pure Python. No LLM calls anywhere in this module - see claude.md and
-methodology.md for why that is the one rule that must never be broken
-here. Every decision below is a plain comparison against structured
-data (extracted Clause objects and a PolicyConfig), never a judgment
-call handed to a model.
-
-This one engine serves both policy touchpoints described in
-architecture.md Section 5.2:
-
-- POLICY_CHECK (diagnostic, runs over raw extracted evidence, before a
-  negotiation move exists): call ``run_policy_check(clauses, policy)``
-  with no ``proposal``.
-- POLICY_GATE (hard pass/fail, runs on a proposed move, after red-team
-  review): call ``run_policy_check(clauses, policy, proposal)``. Where
-  the proposal addresses a clause_type (via ``concessions`` or
-  ``requested_changes``), the proposed value is what gets checked
-  against the hard limit instead of the vendor's original value.
-  Evidence-quality issues (CANNOT_VERIFY / LOW_CONFIDENCE / CONFLICTING)
-  are always evaluated against the underlying extracted evidence, since
-  those are about whether the *evidence* can be trusted, not about what
-  is being proposed.
-
-Priority order when multiple issues could apply to the same rule
-(documented here because the task spec does not fully pin it down, and
-this order is a real design choice, not an accident):
-
-    1. CANNOT_VERIFY  - no usable evidence exists at all; nothing else
-                         can be checked without evidence.
-    2. CONFLICTING    - contradictory evidence exists; surfacing the
-                         conflict is more informative than a single
-                         clause's confidence score, so it is checked
-                         next, ahead of LOW_CONFIDENCE.
-    3. LOW_CONFIDENCE - exactly one piece of evidence exists but it is
-                         not trustworthy enough to treat as fact.
-    4. PASS / BLOCKED - evidence is usable; run the actual hard-limit
-                         comparison.
+"""Deterministic policy engine - pure Python, no LLM calls (claude.md).
+One function serves both POLICY_CHECK (proposal=None) and POLICY_GATE
+(proposal set) from architecture.md Section 5.2. Status priority per
+rule: CANNOT_VERIFY > CONFLICTING > LOW_CONFIDENCE > PASS/BLOCKED;
+rationale for that ordering and the edge cases is in decisions.md
+ADR-006/007.
 """
 
 from __future__ import annotations
@@ -71,12 +39,9 @@ def load_policy_config(path: Union[str, Path] = DEFAULT_POLICY_PATH) -> PolicyCo
 
 @dataclass
 class _ClauseGroupResult:
-    """Internal: the outcome of resolving all evidence for one clause_type.
-
-    ``blocking_status`` is None when the evidence is usable and ``value``
-    holds the single confident value to check. Otherwise the group
-    evaluation is itself the final PolicyCheckResult status for this
-    clause_type - the caller should not attempt a hard-limit comparison.
+    """Outcome of resolving all evidence for one clause_type. If
+    blocking_status is None, value holds a usable value; otherwise this
+    result is itself the final status - no hard-limit check follows.
     """
 
     blocking_status: Optional[CheckStatus]
@@ -142,21 +107,10 @@ def _evaluate_clause_group(clause_type: str, clauses: List[Clause]) -> _ClauseGr
 
 
 def _tie_break(direction: ComparisonDirection, values: List[ClauseValue]) -> Optional[ClauseValue]:
-    """Deterministic contradiction tie-break (ADR-007): default to
-    whichever conflicting value is more conservative / company-favorable
-    for negotiation purposes. That means the value that scores better
-    under the rule's own comparison direction:
-
-    - MAX direction (lower is better for the company, e.g. an escalation
-      cap): take the minimum of the conflicting values.
-    - MIN direction (higher is better for the company, e.g. an SLA
-      floor): take the maximum of the conflicting values.
-    - EQUALS direction (categorical): there is no numeric tie-break:
-      leave it unresolved for human review.
-
-    Only resolves when every conflicting value is numeric; a conflict
-    between numeric and free-text values (which should not happen for a
-    well-formed clause_type) is also left unresolved.
+    """Contradiction tie-break (ADR-007): pick whichever conflicting
+    value scores better under the rule's own direction - min for MAX
+    (lower is better), max for MIN (higher is better). EQUALS or a
+    non-numeric conflict is left unresolved for human review.
     """
     numeric_values = [v for v in values if isinstance(v, (int, float)) and not isinstance(v, bool)]
     if len(numeric_values) != len(values):
@@ -295,10 +249,9 @@ def evaluate_rule(
         hard_limit = ref_group.value  # type: ignore[assignment]
         extra_source_ids = ref_group.source_clause_ids
 
-    # A proposed move, if given, overrides the raw vendor value for the
-    # purposes of the hard-limit check - this is what makes this same
-    # function serve both POLICY_CHECK (proposal=None) and POLICY_GATE
-    # (proposal set) described in architecture.md Section 5.2.
+    # A proposed move, if given, overrides the raw vendor value here -
+    # this is what makes one function serve both POLICY_CHECK and
+    # POLICY_GATE (module docstring).
     value_to_check = group.value
     if proposal is not None:
         if rule.clause_type in proposal.concessions:
