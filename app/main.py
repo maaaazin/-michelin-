@@ -71,22 +71,32 @@ def _pdf_text(uploaded_file) -> str:
 
 
 # --- Uploads ---
-with st.expander("Uploads", expanded=st.session_state.final_state is None):
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("1. Vendor Contract (required)")
-        contract = st.file_uploader("Upload the vendor contract", type=["pdf"], key="contract_uploader")
-        if contract is not None:
-            st.session_state.contract_file = contract
+col1, col2 = st.columns([1, 1], gap="medium")
+with col1:
+    st.markdown(
+        '<div class="upload-section-title">1. Vendor Contract (required)</div>'
+        '<div class="upload-section-desc">Upload the vendor contract you want WinWin to negotiate.</div>',
+        unsafe_allow_html=True,
+    )
+    contract = st.file_uploader(
+        "Upload the vendor contract", type=["pdf"], key="contract_uploader", label_visibility="collapsed"
+    )
+    if contract is not None:
+        st.session_state.contract_file = contract
 
-    with col2:
-        st.subheader("2. Company Policy (optional)")
-        st.caption("If omitted, WinWin uses the default company policy (data/policy_config.json).")
-        policy_pdf = st.file_uploader("Upload the company policy document", type=["pdf"], key="policy_uploader")
-        if policy_pdf is not None and policy_pdf is not st.session_state.policy_file:
-            st.session_state.policy_file = policy_pdf
-            st.session_state.extracted_policy = None
-            st.session_state.policy_confirmed = False
+with col2:
+    st.markdown(
+        '<div class="upload-section-title">2. Company Policy (optional)</div>'
+        '<div class="upload-section-desc">If omitted, WinWin uses the default company policy (data/policy_config.json).</div>',
+        unsafe_allow_html=True,
+    )
+    policy_pdf = st.file_uploader(
+        "Upload the company policy document", type=["pdf"], key="policy_uploader", label_visibility="collapsed"
+    )
+    if policy_pdf is not None and policy_pdf is not st.session_state.policy_file:
+        st.session_state.policy_file = policy_pdf
+        st.session_state.extracted_policy = None
+        st.session_state.policy_confirmed = False
 
 st.divider()
 

@@ -27,6 +27,9 @@
     --status-low-confidence-text: #8A6200;
     --status-human-review-bg: #EAF0F7;
     --status-human-review-text: #2F5D8A;
+
+    --info-bg: #EAF0F7;
+    --info-text: #24486D;
 }
 
 /* Base */
@@ -67,7 +70,23 @@ p, li, .stMarkdown {
     color: var(--text-secondary);
     font-size: 0.95rem;
     max-width: 62rem;
-    margin-bottom: 1.4rem;
+    margin-bottom: 0.75rem;
+}
+
+/* Upload section header - title + description as one tight unit,
+   directly above the file uploader (its own label is collapsed). */
+.upload-section-title {
+    color: var(--text-primary);
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    margin-bottom: 0.2rem;
+}
+.upload-section-desc {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.4;
+    margin-bottom: 0.5rem;
 }
 
 /* Section spacing */
@@ -186,6 +205,23 @@ p, li, .stMarkdown {
 /* Alerts */
 div[data-baseweb="notification"] {
     border-radius: 6px;
+}
+
+/* Info banners (st.info) - match the app's steel-blue accent instead of
+   Streamlit's default alert blue, and keep them from reading as an
+   oversized slab: tighter padding, normal body-text size. */
+[data-testid="stAlertContainer"]:has([data-testid="stAlertContentInfo"]) {
+    background-color: var(--info-bg);
+    border-radius: 6px;
+    padding: 0.6rem 1rem;
+}
+[data-testid="stAlertContentInfo"] {
+    color: var(--info-text);
+    font-size: 0.9rem;
+}
+[data-testid="stAlertContentInfo"] svg {
+    fill: var(--info-text);
+    color: var(--info-text);
 }
 
 /* Audit trail log */
