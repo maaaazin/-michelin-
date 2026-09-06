@@ -35,6 +35,12 @@ For each of these known clause types, find every place the contract
 addresses it and return one entry per distinct mention:
 {", ".join(KNOWN_CLAUSE_TYPES)}.
 
+Scan the ENTIRE contract text, including every appendix and exhibit, not
+just numbered sections - a clause is often overridden or extended there.
+If one passage cross-references another (e.g. "unless otherwise adjusted
+under Section 4.2 or Appendix B"), treat that as an instruction to go
+find and extract those referenced passages too, not a reason to skip them.
+
 Rules:
 - If a clause type is not addressed anywhere in the contract, return
   ONE entry for it with not_specified=true, vendor_value=null,

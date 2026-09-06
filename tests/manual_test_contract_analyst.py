@@ -76,6 +76,16 @@ def main() -> int:
         f"[{'OK' if payment and payment[0].vendor_value else 'CHECK'}] "
         f"payment_terms_days = {payment[0].vendor_value if payment else 'MISSING ENTRY'}"
     )
+
+    # Hard assertion: the sample contract has exactly three escalation
+    # mentions (3.1, 4.2, Appendix B). Fail loudly if recall regresses.
+    if len(escalation) != 3:
+        raise AssertionError(
+            f"Expected 3 separate price_escalation entries (3.1, 4.2, "
+            f"Appendix B), got {len(escalation)}: "
+            f"{[(c.source_section, c.vendor_value) for c in escalation]}"
+        )
+    print("[OK] price_escalation has exactly 3 separate entries.")
     return 0
 
 
