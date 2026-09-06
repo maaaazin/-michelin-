@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
-import tempfile
 import sys
 
 # Add project root to sys.path so we can import harness and agents
@@ -23,7 +22,7 @@ st.set_page_config(
 # Load CSS
 css_path = Path(__file__).parent / "style.css"
 if css_path.exists():
-    st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
+    st.markdown(f"<style>{css_path.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
 st.title("⚖️ Warden")
 st.markdown(
@@ -45,10 +44,10 @@ for key, default in {
 
 
 def _pdf_text(uploaded_file) -> str:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        tmp.write(uploaded_file.getvalue())
-        tmp_path = tmp.name
-    return extract_text_from_pdf(tmp_path)
+    # Reads the upload's bytes directly via PyMuPDF's stream API - no
+    # temp file, so no Windows-specific file-locking risk from writing
+    # then reopening the same path through a second handle.
+    return extract_text_from_pdf(uploaded_file.getvalue())
 
 
 # --- Uploads ---

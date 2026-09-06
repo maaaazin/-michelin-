@@ -265,3 +265,29 @@ now lives in `evaluate_rule`'s call path rather than being visible on
 the schema, so anyone adding a new duration- or unit-bearing clause
 type needs to remember to set `expected_unit` on its `PolicyRule`, not
 just add the clause_type.
+
+---
+
+## ADR-012: Pin requirements.txt to exact versions
+
+**Status:** Accepted
+
+**Context:** A cross-platform audit found requirements.txt using
+floor-only version constraints (`>=X.Y`) for every dependency, with no
+upper bound. That leaves `pip install` free to resolve whatever the
+newest release happens to be at install time, on whichever OS someone
+is installing on - untested against this codebase.
+
+**Decision:** Pin every dependency to the exact version already
+confirmed working end to end in this environment (full pytest suite
+plus live pipeline runs against real PDFs): `langgraph==1.2.11`,
+`openai==3.8.0`, `streamlit==1.63.0`, `pymupdf==1.28.2`,
+`pydantic==2.13.5`, `pandas==3.0.5`.
+
+**Consequences:** A fresh install reproduces a known-good set of
+versions instead of gambling on whatever is newest, which is what
+actually protects against a platform-specific wheel or build issue
+showing up only on someone else's OS. The cost: dependencies now need
+a deliberate bump (and a re-test) to move forward, rather than picking
+up patch releases automatically - the right trade-off for a hackathon
+build where "it works on my machine" needs to also work on a judge's.
