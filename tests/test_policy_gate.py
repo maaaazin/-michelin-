@@ -235,6 +235,52 @@ def test_liability_cap_cannot_verify_when_reference_missing():
     assert result.status == CheckStatus.CANNOT_VERIFY
 
 
+def test_liability_cap_stated_as_percent_of_reference_converts_and_passes():
+    # "Liability shall not exceed 100% of the Annual Contract Value" -
+    # a percentage, not an absolute amount in the reference's own unit.
+    annual_value = Clause(
+        clause_type="annual_contract_value",
+        vendor_value=2_000_000,
+        unit="INR",
+        source_section="1.1",
+        source_text="Annual Contract Value: INR 20,00,000.",
+        confidence=0.98,
+    )
+    liability = Clause(
+        clause_type="liability_cap",
+        vendor_value=100.0,
+        unit="percent",
+        source_section="13.3",
+        source_text="Aggregate liability shall not exceed 100% of the Annual Contract Value.",
+        confidence=0.95,
+    )
+    result = evaluate_rule(LIABILITY_RULE, [annual_value, liability])
+    assert result.status == CheckStatus.PASS
+    assert result.checked_value == 2_000_000
+
+
+def test_liability_cap_stated_as_low_percent_of_reference_blocks():
+    annual_value = Clause(
+        clause_type="annual_contract_value",
+        vendor_value=2_000_000,
+        unit="INR",
+        source_section="1.1",
+        source_text="Annual Contract Value: INR 20,00,000.",
+        confidence=0.98,
+    )
+    liability = Clause(
+        clause_type="liability_cap",
+        vendor_value=50.0,
+        unit="percent",
+        source_section="13.3",
+        source_text="Aggregate liability shall not exceed 50% of the Annual Contract Value.",
+        confidence=0.95,
+    )
+    result = evaluate_rule(LIABILITY_RULE, [annual_value, liability])
+    assert result.status == CheckStatus.BLOCKED
+    assert result.checked_value == 1_000_000
+
+
 def test_proposal_overrides_vendor_value_for_the_gate_check():
     # POLICY_GATE usage: the underlying vendor evidence is out of policy,
     # but the negotiation agent's proposal brings it into compliance.
@@ -369,3 +415,25 @@ def test_categorical_strategy_pass_and_blocked():
         confidence=0.9,
     )
     assert evaluate_rule(DATA_OWNERSHIP_RULE, [mismatched]).status == CheckStatus.BLOCKED
+
+
+def test_categorical_strategy_matches_a_full_sentence_containing_the_keyword():
+    # A negotiated value is often a full clause sentence, not the bare
+    # keyword - "contains", not exact-equals, is what the gate checks.
+    sentence = Clause(
+        clause_type="data_ownership",
+        vendor_value="Company owns and retains all right, title, and interest in and to all Customer Data.",
+        source_section="10.1",
+        source_text="...",
+        confidence=0.9,
+    )
+    assert evaluate_rule(DATA_OWNERSHIP_RULE, [sentence]).status == CheckStatus.PASS
+
+    wrong_party = Clause(
+        clause_type="data_ownership",
+        vendor_value="Vendor owns and retains all right, title, and interest in and to all Customer Data.",
+        source_section="10.1",
+        source_text="...",
+        confidence=0.9,
+    )
+    assert evaluate_rule(DATA_OWNERSHIP_RULE, [wrong_party]).status == CheckStatus.BLOCKED

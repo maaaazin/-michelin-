@@ -170,7 +170,10 @@ def _normalize_value(rule: PolicyRule, value: ClauseValue, unit: Optional[str]) 
 def _compare(direction: ComparisonDirection, value: ClauseValue, limit: ClauseValue) -> bool:
     """The actual hard-limit comparison. Plain code, no LLM in sight."""
     if direction == ComparisonDirection.EQUALS:
-        return str(value).strip().lower() == str(limit).strip().lower()
+        # Contains, not exact-equals: a negotiated value is often a full
+        # clause sentence ("Company owns and retains..."), not the bare
+        # keyword ("company") - it should still count as satisfying it.
+        return str(limit).strip().lower() in str(value).strip().lower()
     try:
         numeric_value = float(value)
         numeric_limit = float(limit)
@@ -253,6 +256,7 @@ def evaluate_rule(
     # fixed constant).
     hard_limit: ClauseValue = rule.hard_limit_value
     extra_source_ids: List[str] = []
+    is_percent_of_reference = False
     if rule.reference_clause_type:
         ref_group = _evaluate_clause_group(rule.reference_clause_type, clauses)
 
@@ -294,8 +298,18 @@ def evaluate_rule(
         hard_limit = ref_group.value  # type: ignore[assignment]
         extra_source_ids = ref_group.source_clause_ids
 
-        # ADR-011: don't compare amounts in different units/currencies.
-        if group.unit and ref_group.unit and group.unit.strip().lower() != ref_group.unit.strip().lower():
+        # A liability cap stated as "100% of annual contract value" is a
+        # percentage of the reference, not an absolute amount in the
+        # reference's own unit - convert instead of rejecting as a mismatch.
+        is_percent_of_reference = (
+            bool(group.unit)
+            and group.unit.strip().lower() == "percent"
+            and isinstance(ref_group.value, (int, float))
+        )
+
+        # ADR-011: don't compare amounts in different units/currencies,
+        # unless it is the percent-of-reference case just converted above.
+        if not is_percent_of_reference and group.unit and ref_group.unit and group.unit.strip().lower() != ref_group.unit.strip().lower():
             return PolicyCheckResult(
                 clause_type=rule.clause_type,
                 status=CheckStatus.CANNOT_VERIFY,
@@ -312,19 +326,20 @@ def evaluate_rule(
 
     # A proposed move, if given, overrides the raw vendor value here -
     # this is what makes one function serve both POLICY_CHECK and
-    # POLICY_GATE (module docstring). Proposals carry no unit, so only
-    # duration parsing (not the unit-mismatch check) applies to them.
+    # POLICY_GATE (module docstring). It inherits the evidence's own
+    # unit: a proposal changing a percent-denominated field is assumed
+    # to still be in percent, absent any reason to think otherwise.
     value_to_check = group.value
-    value_unit = group.unit
     if proposal is not None:
         if rule.clause_type in proposal.concessions:
             value_to_check = proposal.concessions[rule.clause_type]
-            value_unit = None
         elif rule.clause_type in proposal.requested_changes:
             value_to_check = proposal.requested_changes[rule.clause_type]
-            value_unit = None
 
-    value_to_check, norm_error = _normalize_value(rule, value_to_check, value_unit)
+    if is_percent_of_reference and isinstance(value_to_check, (int, float)) and not isinstance(value_to_check, bool):
+        value_to_check = (value_to_check / 100.0) * hard_limit
+
+    value_to_check, norm_error = _normalize_value(rule, value_to_check, group.unit)
     if norm_error:
         return PolicyCheckResult(
             clause_type=rule.clause_type,
