@@ -28,10 +28,13 @@ run against it is not "done," it is unverified.
    architecture.md Section 6. Get the happy path (no violations, no
    contradictions, one round) working end to end before adding replan
    loops.
-5. **Demo data** (`/data`) - the Acme Cloud Services vendor contract and
-   company policy from architecture.md Section 11, including the
-   deliberate Section 4.2 / Appendix B contradiction. Build this before
-   the UI so the UI has something real to render.
+5. **Demo data** (`/data`, `/test_docs`) - originally planned as the
+   fictional Acme Cloud Services vendor contract and company policy from
+   architecture.md Section 11 (built before the UI, so the UI would have
+   something real to render). What actually ended up in `/test_docs` is
+   six real PDFs added later in the build, once real-PDF testing
+   surfaced gaps the fictional text hadn't - see architecture.md
+   Section 11 for the final set and what each one exercises.
 6. **UI** (`/app`, Streamlit) - call the graph directly, in-process
    (ADR-002). Render the negotiation trace: proposal, policy check
    result, red-team findings, final outcome, audit log.
@@ -72,21 +75,25 @@ matches an enum, or whether a required field is present. See
 
 ## Definition of done for the core build
 
-The core loop is done when, using the demo data from architecture.md
-Section 11, a single run through the graph:
+The core loop is done when a single run through the graph, against the
+real demo data in `/test_docs` (architecture.md Section 11):
 
 - extracts all clauses, including emitting `NOT_SPECIFIED` for any
   policy-relevant clause absent from the contract,
 - flags at least one piece of evidence below the 0.6 confidence
   threshold and excludes it from the negotiation proposal,
-- detects the Section 4.2 / Appendix B contradiction, applies the
-  tie-break, and flags it for human sign-off,
+- detects a real contradiction (`contradictory_contract_demo.pdf`),
+  applies the tie-break, and flags it for human sign-off,
 - has the negotiation agent propose an out-of-policy move at least once,
   gets it blocked by the policy gate, and produces a compliant proposal
   on replan,
-- passes red-team review and the policy gate on the compliant proposal,
-  and
+- passes red-team review and the policy gate on a genuinely compliant
+  proposal (`clean_pass_demo.pdf`), and
 - produces a final recommendation with a full audit trail from proposal
   through policy check, evidence, review, to outcome.
 
-Only after all of that is true should stretch goals be attempted.
+This is now all true and verified live - see
+`tests/manual_test_real_pdfs.py` and `tests/manual_test_clean_contract.py`,
+and ADR-015 for the two bugs found and fixed while confirming the last
+point above. Stretch goals (ADR-009) were not attempted; the core build
+and its pre-demo polish took the full time available.

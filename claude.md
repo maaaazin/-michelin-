@@ -42,7 +42,8 @@ Concretely:
 ## Ask before adding a new dependency
 
 The approved stack is fixed for this build: `langgraph`, the `openai`
-SDK, `streamlit`, `pymupdf`, `pydantic` (see `requirements.txt`). Do not
+SDK, `streamlit`, `pymupdf`, `pydantic`, `pandas` (see `requirements.txt`).
+Do not
 add a new package - including a "just this one small helper library" -
 without flagging it to the user first and getting a yes. This includes
 swapping in a different LLM SDK package than the one already pinned in
@@ -72,8 +73,10 @@ documents).
     evidence validation, retry/failure routing, audit logging, the
     LangGraph state machine wiring.
   - `/agents` - LLM-calling code, one module per agent (Contract
-    Analyst, Legal/Risk, Business/Finance, Negotiation, Red-Team).
-  - `/data` - demo contract(s) and company policy fixtures.
+    Analyst, Policy Analyst, Legal/Risk, Business/Finance, Negotiation,
+    Red-Team).
+  - `/data` - the default company policy fixture (`policy_config.json`);
+    demo contract PDFs live in `/test_docs`.
   - `/app` - Streamlit UI, calling the graph directly (no API layer -
     ADR-002).
 - An agent module should never import a policy threshold and check it
@@ -105,6 +108,17 @@ tell later which piece broke.
 
 ## Current status
 
-Commit #1 (this one): docs finalized, folder skeleton created, no
-business logic yet. Next up per [methodology.md](methodology.md): Pydantic
-schemas, then the policy engine.
+Core build is complete and demo-ready: all six agents (Contract Analyst,
+Policy Analyst, Legal/Risk, Business/Finance, Negotiation, Red-Team) are
+implemented and wired into the real LangGraph state machine
+(`harness/graph.py`), the policy engine and evidence-grounding check are
+deterministic and unit-tested (`/tests`, 33 passing), and the Streamlit UI
+(`/app`) runs the graph directly end to end against uploaded PDFs. Demo
+data lives in `/test_docs`: five vendor contracts (including a
+deliberately clean, fully-compliant one and a deliberately contradictory
+one) plus a company policy document, in place of the originally planned
+fictional Acme Cloud Services scenario from the early docs. See
+[decisions.md](decisions.md) for the full ADR history, including the
+project's two renames (ContractGuard -> Warden -> WinWin, ADR-001 and
+ADR-013) and the FINAL-approval-path bugs found and fixed pre-demo
+(ADR-015).

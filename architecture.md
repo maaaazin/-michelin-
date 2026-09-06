@@ -1,7 +1,9 @@
 # WinWin — Architecture
 
-*(Working title. Formerly drafted as "ContractGuard"; repo directory is
-currently `-michelin-`. See [decisions.md](decisions.md) ADR-001.)*
+*(Final name for the demo. The project was drafted as "ContractGuard,"
+built under the working title "Warden," and renamed to "WinWin" ahead of
+the live demo; repo directory is still `-michelin-` and stays that way.
+See [decisions.md](decisions.md) ADR-001 and ADR-013.)*
 
 ## 1. Overview
 
@@ -14,9 +16,11 @@ Core principle:
 > The LLM proposes; the harness verifies and decides whether the
 > proposal is allowed to proceed.
 
-This is a 4-hour hackathon build. The architecture below is the finalized
-core scope — see [decisions.md](decisions.md) for what was deliberately
-cut or deferred, and [methodology.md](methodology.md) for build order.
+This started as a 4-hour hackathon build; the architecture below now
+describes the system as actually built and demo-ready, not just the
+planned scope — see [decisions.md](decisions.md) for what was
+deliberately cut, deferred, or changed along the way, and
+[methodology.md](methodology.md) for the build order that was followed.
 
 ## 2. Goals
 
@@ -49,48 +53,70 @@ prototype, not a multi-client service, so the extra hop bought nothing.
                                | direct in-process call
                                v
         +--------------------------------------------------+
-        |                 WARDEN HARNESS                    |
+        |                 WINWIN HARNESS                    |
         |               (LangGraph graph)                   |
         |                                                    |
         |  State Store (in-memory dict)   Policy Engine      |
         |  Evidence Store                 Policy Gate        |
-        |  Retry Manager                  Failure Router     |
+        |  Grounding Check                Failure Router     |
         |  Audit Logger                                      |
         +---------------------+------------------------------+
                               |
-        +---------------------+---------------------+
-        |             |               |             |
-        v             v               v             |
-   Contract       Legal/Risk    Business/Finance     |
-   Analyst          Agent            Agent           |
-   Agent             |               |               |
-        |            +-------+-------+               |
-        |                    |                        |
-        |                    v                        |
-        |            Negotiation Agent <--------------+ (replan target)
-        |                    |
-        |                    v
-        |            Proposed Move
-        |                    |
-        |                    v
-        |            RED_TEAM_REVIEW  (Red-Team Agent)
-        |                    |
-        |                    v
-        |             POLICY_GATE  (deterministic)
-        |               /        \
-        |             PASS       FAIL
-        |              |           |
-        |              v           +---> back to Negotiation Agent
-        |            FINAL
-        |              |
-        +--------------+
-                        v
-                 AUDIT + OUTPUT
+                              v
+                    Policy Analyst Agent   (only if a policy PDF was
+                              |              uploaded; else the default
+                              v              policy_config.json is used)
+                    Contract Analyst Agent
+                              |
+                              v
+                       POLICY_CHECK  (deterministic, diagnostic)
+                              |
+                              v
+              +---------------+---------------+
+              v                               v
+        Legal/Risk Agent              Business/Finance Agent
+              |                               |
+              +---------------+---------------+
+                              v
+                    Negotiation Agent  <---------------+ (replan target,
+                              |                          up to 3 times)
+                              v                          |
+                       Proposed Move                     |
+                              |                           |
+                              v                           |
+                    Red-Team Agent (independent review)   |
+                              |                           |
+                              v                           |
+                       POLICY_GATE  (deterministic;       |
+                        fails on any hard violation        |
+                        OR a Red-Team REJECT)              |
+                        /              \                   |
+                      PASS             FAIL ----------------+
+                       |                 |
+                       v                 v (only after 3 failed replans)
+                     FINAL          HUMAN_REVIEW
+                       |                 |
+                       +--------+--------+
+                                v
+                        AUDIT + OUTPUT
 ```
 
 ## 4. Agents
 
-Five agents, kept separate on purpose (see ADR-003 on Legal vs Risk).
+Six agents, kept separate on purpose (see ADR-003 on Legal vs Risk).
+
+### 4.0 Policy Analyst Agent
+
+- Runs first, and only when a company policy PDF is uploaded (otherwise
+  the graph uses `data/policy_config.json` unchanged).
+- Extracts only the numeric target/hard-limit value and a confidence
+  score per rule type from the document text; the structural fields
+  (comparison direction, unit, description) always come from the shipped
+  default template, never re-derived by the model (ADR-014).
+- Below a 0.7 confidence threshold, or if a rule type isn't found at all,
+  that rule falls back to the default rather than guessing, and is
+  tagged so the UI can show the user exactly which rules came from their
+  document.
 
 ### 4.1 Contract Analyst Agent
 
@@ -164,6 +190,15 @@ It must not simply restate the Negotiation Agent's own reasoning — it is
 a separate prompt with an adversarial framing, checking the same evidence
 independently.
 
+Its verdict is a hard gate (Section 5.2): a REJECT alone fails
+`POLICY_GATE`, same as a hard-policy violation. That makes prompt
+calibration load-bearing, not cosmetic — an adversarial framing with no
+counter-instruction for the genuinely-clean case can reject a compliant
+proposal indefinitely. The prompt requires every REJECT to cite a
+specific item from the evidence given (a policy result, a named review
+concern, or an internal contradiction); absent that, the verdict must be
+ACCEPT (ADR-015).
+
 ## 5. The Harness
 
 The harness is deterministic Python. No LLM call ever decides whether a
@@ -184,22 +219,30 @@ Company policy is structured data, not prose:
 }
 ```
 
-### 5.2 Policy Check vs. Policy Gate
+### 5.2 Policy Extraction, Policy Check, and Policy Gate
 
-WinWin's state machine (Section 6) has two distinct policy touchpoints
+WinWin's state machine (Section 6) has three distinct policy touchpoints
 that do different jobs:
 
-- **POLICY_CHECK** runs once, right after extraction, over the raw
-  contract evidence. It is diagnostic: it compares every extracted clause
-  to company policy and produces a list of issues (violations, gaps,
-  contradictions, low-confidence facts) that feeds the negotiation
+- **POLICY_EXTRACTION** runs first, and only does anything if a company
+  policy PDF was uploaded — otherwise the graph leaves the shipped
+  `data/policy_config.json` untouched. When it runs, it produces the
+  `PolicyConfig` every later stage checks against (ADR-014).
+- **POLICY_CHECK** runs once, right after contract extraction, over the
+  raw contract evidence. It is diagnostic: it compares every extracted
+  clause to company policy and produces a list of issues (violations,
+  gaps, contradictions, low-confidence facts) that feeds the negotiation
   strategy. It never blocks anything by itself.
 - **POLICY_GATE** runs on every proposed negotiation move, after
   red-team review. It is a hard pass/fail check: any hard-constraint
-  violation in the proposal itself, including one the red-team agent
-  surfaced, fails the gate and sends the workflow back to
+  violation in the proposal itself, or a Red-Team `REJECT` verdict
+  (Section 4.5), fails the gate and sends the workflow back to
   `NEGOTIATION_PLANNING`. A passed gate is what allows a proposal to
   become the final recommendation.
+
+`POLICY_CHECK` and `POLICY_GATE` are the same underlying function
+(`harness/policy_gate.py:run_policy_check`), called with and without a
+proposed move — one implementation, not two to keep in sync.
 
 ```
 POLICY GATE
@@ -286,53 +329,76 @@ Every meaningful state transition is logged, e.g.:
 
 ## 6. State Machine
 
-Finalized flow (LangGraph):
+As implemented in `harness/graph.py` (9 LangGraph nodes; `NegotiationStage`
+in `schemas/negotiation.py` names each stage):
 
 ```
 START
   |
   v
-CONTRACT_ANALYSIS     Contract Analyst extracts structured evidence
-  |                   (NOT_SPECIFIED for absent clauses, confidence
-  |                   score per fact)
+POLICY_EXTRACTION      Runs unconditionally, but only acts if a policy
+  |                    PDF was uploaded (Policy Analyst extracts a
+  |                    PolicyConfig); otherwise leaves the default
+  |                    data/policy_config.json untouched.
   v
-POLICY_CHECK          Deterministic: policy engine compares evidence to
-  |                   company policy. Flags hard-constraint issues,
-  |                   NOT_SPECIFIED clauses, sub-threshold-confidence
-  |                   evidence, and contradictions (with tie-break
-  |                   applied and recorded for sign-off). Diagnostic
-  |                   only - does not block.
+CONTRACT_ANALYSIS      Contract Analyst extracts structured evidence
+  |                    (NOT_SPECIFIED for absent clauses, a confidence
+  |                    score per fact).
   v
-NEGOTIATION_PLANNING  Legal/Risk + Business/Finance + Negotiation agents
-  |                   produce a proposed move, grounded only in evidence
-  |                   that cleared the confidence threshold.
+POLICY_CHECK           Deterministic: policy engine compares evidence to
+  |                    company policy. Flags hard-constraint issues,
+  |                    NOT_SPECIFIED clauses, sub-threshold-confidence
+  |                    evidence, and contradictions (with tie-break
+  |                    applied and recorded for sign-off). Diagnostic
+  |                    only - does not block.
   v
-RED_TEAM_REVIEW       Red-Team Agent independently challenges the move
-  |                   and attaches findings to the proposal.
+(initial reviews)      Legal/Risk Agent and Business/Finance Agent each
+  |                    independently review the extracted evidence and
+  |                    policy check results once, in parallel intent
+  |                    (sequential calls, independent prompts). Not
+  |                    re-run on a replan - only NEGOTIATION_PLANNING
+  |                    through POLICY_GATE loops.
   v
-POLICY_GATE           Deterministic hard-constraint check on the
-  |                   proposal, informed by red-team findings.
+NEGOTIATION_PLANNING <--------------------------------------------+
+  |                    Negotiation Agent proposes a move, grounded      |
+  |                    only in evidence that cleared the confidence     |
+  |                    threshold and passed harness/grounding_check.py. | (replan
+  v                                                                     |  target,
+RED_TEAM_REVIEW        Red-Team Agent independently challenges the      |  up to
+  |                    proposal (Section 4.5).                         |  MAX_REPLANS
+  v                                                                     |  = 3 times)
+POLICY_GATE            Deterministic: hard-constraint check on the      |
+  |                    proposal, OR a Red-Team REJECT verdict - either  |
+  |                    alone fails the gate.                           |
+  |                                                                     |
+  +---- FAIL, replans used < 3 ----> back to NEGOTIATION_PLANNING ------+
   |
-  +---- FAIL ----> back to NEGOTIATION_PLANNING (replan)
+  +---- FAIL, replans used = 3 ----> HUMAN_REVIEW ----> END
   |
  PASS
   |
   v
-FINAL                 Approved recommendation + audit trail
+FINAL                  Approved recommendation + audit trail
   |
   v
 END
 ```
 
-A bounded replan count (recommended: 3) prevents an infinite
-propose-reject loop; exceeding it routes to human review instead of
-looping forever.
+`HUMAN_REVIEW` is the graceful-degradation terminal state added beyond
+the original draft: if the replan loop cannot reach an approvable
+proposal within `MAX_REPLANS = 3` attempts, the graph stops and surfaces
+exactly what remains unresolved (which rules are still `BLOCKED` /
+`CONFLICTING`, and the Red-Team's last objection) rather than looping
+forever or forcing a bad approval.
 
 This collapses an earlier two-gate draft (policy gate before *and* after
-red-team review) into the single gate above — see ADR-008. Red-team
-findings that amount to a hard-policy issue simply become one of the
-reasons the one gate fails; softer, qualitative red-team concerns are
-attached to the audit trail regardless of PASS/FAIL, for human visibility.
+red-team review) into the single gate above — see ADR-008. A Red-Team
+`REJECT` alone fails the one gate; softer, qualitative red-team concerns
+on an otherwise-passing proposal are attached to the audit trail
+regardless of PASS/FAIL, for human visibility. Getting the Red-Team
+Agent's prompt calibrated so it doesn't reject a genuinely clean proposal
+turned out to be load-bearing, not cosmetic — see Section 4.5 and
+ADR-015.
 
 ## 7. Core Edge Cases
 
@@ -406,6 +472,7 @@ never something an agent call can rewrite.
 | Document processing | PyMuPDF |
 | Validation / schemas | Pydantic |
 | Frontend | Streamlit (calls the graph directly, in-process) |
+| Tables / UI data | pandas (dataframes, `Styler` for status coloring) |
 | Persistence (core) | in-memory dict |
 | Persistence (stretch) | SQLite |
 
@@ -415,50 +482,80 @@ extraction. None of these serve a 4-hour build of this scope. Any new
 dependency beyond the list above gets flagged before it is added (see
 [claude.md](claude.md)).
 
-## 11. Demo Scenario
+## 11. Demo Data
 
-Fictional vendor: Acme Cloud Services.
+The original plan (below, superseded) was a single fictional vendor with
+a hand-built contradiction. What actually shipped is six real PDFs in
+`/test_docs`, each built to exercise a specific harness mechanism, run
+against the default `data/policy_config.json` unless noted:
 
-**Company policy:** escalation max 5%, payment min Net 30, termination
+| File | What it demonstrates |
+|---|---|
+| `clean_pass_demo.pdf` | Fully policy-compliant contract - the genuine happy path; reaches `FINAL` with 0 replans (ADR-015). |
+| `contradictory_contract_demo.pdf` | Multiple clauses disagree with themselves (escalation, termination, liability cap, auto-renewal all `CONFLICTING`) plus a hard `BLOCKED` data-ownership clause - the contradiction-detection story. |
+| `failure_demo_policyViolation.pdf` | Several straightforward hard-policy violations for the Negotiation Agent to resolve, with Red-Team catching its early arithmetic mistakes across replans. |
+| `hidden_risk_demo.pdf` | Mostly compliant with one persistent `BLOCKED` data-ownership clause the negotiation agent repeatedly fails to actually fix. |
+| `happy_path_demo.pdf` | Named for the original intent, but the contract itself states 3 different price-escalation values and 2 different termination-notice values across sections - so it escalates to `HUMAN_REVIEW` too. Kept as-is; `clean_pass_demo.pdf` is the real happy path now. |
+| `playbook (1).pdf` | A company policy document (not a contract) - Apex Manufacturing's own vendor-negotiation playbook. Extracted via the Policy Analyst and applied to `happy_path_demo.pdf`'s contract text, exercising `POLICY_EXTRACTION`. |
+
+Run all six against the real graph with `tests/manual_test_real_pdfs.py`;
+run just the compliance check with `tests/manual_test_clean_contract.py`.
+
+**Original planning scenario (fictional, not built as PDFs):** vendor
+Acme Cloud Services, annual fee Rs 20 lakh, escalation 8%, payment Net 15,
+termination 180 days, liability Rs 2 lakh, SLA 99.5%, 1-year auto-renewal,
+against a policy of escalation max 5%, payment min Net 30, termination
 max 60 days, liability at least the annual contract value, SLA min 99.9%,
-data ownership retained by the company.
-
-**Vendor contract:** annual fee Rs 20 lakh, escalation 8%, payment Net 15,
-termination 180 days, liability Rs 2 lakh, SLA 99.5%, 1-year auto-renewal.
-
-**Built-in contradiction:** Section 4.2 caps escalation at 5%; Appendix B
-allows the vendor to raise fees up to 15% at renewal.
+data ownership retained by the company, with a built-in contradiction
+(Section 4.2 caps escalation at 5%; Appendix B allows the vendor to raise
+fees up to 15% at renewal). `contradictory_contract_demo.pdf` above is
+the real analog of this scenario.
 
 ## 12. Traditional LLM Baseline (comparison mode, stretch goal)
+
+**Not built.** Remains a stretch-goal idea only (ADR-009) - the core loop
+and edge cases took the full build, so this was never started.
 
 ```
 Contract + Policy -> single LLM call -> recommendation
 ```
 
 No deterministic policy gate, no independent review, no persistent
-structured state, no recovery mechanism. Useful as a side-by-side
-demo if time allows (see ADR-009) — not a claim that any specific model
-will always fail, just a demonstration that the architecture has no
+structured state, no recovery mechanism. Would be useful as a
+side-by-side demo if built — not a claim that any specific model will
+always fail, just a demonstration that the architecture has no
 structural enforcement.
 
 ## 13. WinWin Demonstration
 
+A real audit trail from `clean_pass_demo.pdf` (Section 11) reaching
+`FINAL` with 0 replans, captured live via `tests/manual_test_real_pdfs.py`:
+
 ```
-Negotiation Agent proposes:
-"Accept 8% annual escalation in exchange for Net 60 payment terms."
-
-POLICY GATE
-Proposed escalation: 8%   Maximum allowed: 5%
-BLOCKED - hard constraint violation
-Returning to NEGOTIATION_PLANNING...
-
-New proposal: 5% escalation, Net 60 payment, 30-day termination,
-99.9% SLA, liability at annual contract value.
-
-RED_TEAM_REVIEW: passed
-POLICY_GATE: passed
-FINAL PROPOSAL APPROVED
+Using default company policy (data/policy_config.json).
+Contract uploaded; 8 clause(s) extracted.
+Policy check complete: 7 PASS.
+Legal/Risk review: ACCEPT.
+Business/Finance review: ACCEPT.
+Negotiation strategy generated.
+Red-Team ACCEPT: The proposal accurately reflects compliance with all
+company policies, as evidenced by all policy check results being marked
+as PASS. Both the Legal/Risk and Business/Finance reviews are also
+ACCEPT, confirming that there are no legal risks, ambiguities, or
+operational concerns with the proposed terms. There are no contradictions
+or ignored items within the proposal. Therefore, the negotiation proposal
+is sound and should be accepted.
+Policy gate PASSED (price_escalation=PASS; payment_terms_days=PASS;
+termination_notice_days=PASS; liability_cap=PASS; sla_uptime=PASS;
+data_ownership=PASS; auto_renewal_cancellation_window_days=PASS);
+Red-Team ACCEPT. Final proposal approved.
+Final proposal approved.
 ```
+
+For the replan-and-block story, run `contradictory_contract_demo.pdf` or
+`failure_demo_policyViolation.pdf` (Section 11) - each produces a real
+`POLICY_GATE FAILED ... Replanning` trace followed by either a corrected
+proposal or, after 3 attempts, escalation to `HUMAN_REVIEW`.
 
 ## 14. Design Principle
 

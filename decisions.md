@@ -291,3 +291,151 @@ showing up only on someone else's OS. The cost: dependencies now need
 a deliberate bump (and a re-test) to move forward, rather than picking
 up patch releases automatically - the right trade-off for a hackathon
 build where "it works on my machine" needs to also work on a judge's.
+
+---
+
+## ADR-013: Second rename, "Warden" to "WinWin"
+
+**Status:** Accepted
+
+**Context:** ADR-001 settled on "Warden" as the working name, and the
+codebase (agent prompts, the Streamlit UI, and all of these docs) used it
+throughout the core build. Ahead of the live demo, the team settled on
+"WinWin" as the final name instead.
+
+**Decision:** Renamed every occurrence of "Warden" to "WinWin" across the
+codebase and docs (agent system prompts, UI strings, architecture.md,
+decisions.md, failures.md, methodology.md, claude.md,
+problem_statement.md) via a direct text replace - including inside
+ADR-001 and elsewhere in this log. README.md was intentionally left
+untouched in this pass, handled separately by the team. No files were
+renamed; nothing had "warden" in a filename.
+
+**Consequences:** This log's own entries (ADR-001 in particular) now read
+as if "WinWin" was always the name, which is not literally true - this
+entry is what preserves the real history for anyone reading later: the
+project was named **ContractGuard** (pre-build draft) -> **Warden**
+(from the repo's first commit through the core build) -> **WinWin**
+(final, pre-demo, commit `3258c96`). Git history remains the authoritative record
+of exactly when each name was in effect; do not "correct" ADR-001's text
+back to "Warden" later under the mistaken impression it was left stale by
+accident.
+
+---
+
+## ADR-014: Policy-extraction default-fallback design
+
+**Status:** Accepted
+
+**Context:** `agents/policy_analyst.py` extracts a company's negotiation
+policy from an uploaded policy PDF (an optional alternative to the
+shipped `data/policy_config.json` default). Not every rule type is
+confidently or explicitly stated in a given policy document, and here a
+wrong hard limit is worse than no extraction at all - it feeds directly
+into the same `POLICY_GATE` that decides whether a negotiation move is
+allowed to proceed, for every rule in the run.
+
+**Decision:** The LLM extracts only the numeric `target_value` /
+`hard_limit_value` pair, a `found` flag, and a confidence score per rule
+type. The structural fields - `direction`, `expected_unit`,
+`reference_clause_type`, `description` - always come from the shipped
+`data/policy_config.json` template and are never re-derived by the model;
+they are domain facts (e.g. "lower escalation is better") that do not
+vary per company. Below `POLICY_RULE_CONFIDENCE_THRESHOLD = 0.7`, or if a
+rule type is not found in the document at all, that rule falls back to
+the config default rather than guessing, and is tagged
+`PolicyRuleSource.DEFAULT_FALLBACK` (vs. `EXTRACTED`) so callers can tell
+the two apart.
+
+**Consequences:** The Streamlit policy-review table (`app/main.py`)
+surfaces this distinction directly to the user before they confirm and
+run a negotiation - a low-confidence or missing extraction is visible,
+never silently substituted. The 0.7 threshold is deliberately stricter
+than the evidence-extraction threshold (0.6, ADR-006): a wrong policy
+rule taints every downstream negotiation decision in the run, not just
+one clause's evaluation.
+
+---
+
+## ADR-015: Fix the two bugs blocking the FINAL approval path
+
+**Status:** Accepted
+
+**Context:** A pre-demo check found that all five original sample PDFs
+escalated to `HUMAN_REVIEW` after exhausting every replan. Before
+accepting "the sample contracts are violation-heavy by design" as the
+explanation, a deliberately fully policy-compliant contract (every clause
+at or better than `data/policy_config.json`'s target, no contradictions)
+was run through the real graph to check whether `FINAL` is reachable at
+all. It was not: the proposal correctly needed no changes, both the
+Legal/Risk and Business/Finance reviews correctly returned `ACCEPT`, and
+the run still exhausted all 3 replans. Two separate, real bugs were
+found:
+
+1. `agents/red_team.py`'s system prompt told the model to "actively look
+   for reasons to reject," with no counter-instruction for the case
+   where none exist. It kept inventing speculative, non-evidence-grounded
+   objections ("cumulative financial risk," hypothetical future
+   scenarios) even with every policy check PASS and both other reviewers
+   at ACCEPT.
+2. `harness/grounding_check.py`'s rationale number-extraction regex did
+   not handle comma-grouped numbers (`"1,000,000"` tokenized as `"1"`,
+   `"000"`, `"000"`, none of which equals the cited clause's real value
+   `1000000.0`), so any proposal citing a large clause value the ordinary
+   way got a false `GROUNDING_FAILED`, crashing the pipeline with
+   `NegotiationAgentError` instead of proceeding.
+
+**Decision:** Fixed both narrowly, without touching the hard-gate logic
+in `harness/graph.py` (`red_team_rejected` still forces `hard_fail` -
+that block on a genuine `REJECT` is correct and untouched). Rewrote the
+Red-Team prompt with an explicit decision rule: a `REJECT` verdict must
+cite a specific item from the evidence given (a policy result, a named
+review concern, or a contradiction in the proposal itself); absent that,
+the verdict must be `ACCEPT`. Fixed the grounding-check regex to match a
+comma-grouped number as one token before falling back to plain digits.
+
+**Consequences:** A genuinely compliant contract now reliably reaches
+`FINAL` with 0 replans (verified live, repeatedly, via
+`tests/manual_test_clean_contract.py` and the `clean_pass_demo.pdf` PDF
+round-trip in `tests/manual_test_real_pdfs.py`) - the harness can approve
+a good deal, not just catch bad ones. One residual, milder issue was
+observed and left as-is rather than chased further under time pressure:
+the Contract Analyst occasionally emits a redundant duplicate
+`not_specified` entry alongside a real one for the same `clause_type`,
+which can confuse Business/Finance into a spurious `FLAG` even though
+`POLICY_CHECK` itself correctly filters the duplicate out and still shows
+PASS. This is LLM extraction non-determinism, not a structural defect -
+worth another look if it recurs often, but out of scope for this pass.
+
+---
+
+## ADR-016: Frontend redesign approach
+
+**Status:** Accepted
+
+**Context:** The Streamlit UI's original styling used a generic
+default-blue theme with heavy emoji use for section labels and buttons,
+and had no consistent visual language for the five `CheckStatus` values
+(`PASS`, `BLOCKED`, `CONFLICTING`, `CANNOT_VERIFY`, `LOW_CONFIDENCE`) or
+the `FINAL` vs. `HUMAN_REVIEW` terminal states - all of which are
+central to what the harness actually does and deserved to read as
+intentional, not decorative, ahead of a live demo.
+
+**Decision:** Adopted one neutral palette (slate/charcoal text, an
+off-white ground, a single muted steel-blue accent used consistently for
+buttons, the active tab, and metric values) plus one fixed status-color
+system (green for PASS/ACCEPT, red for BLOCKED/REJECT, amber for
+CONFLICTING/FLAG, gray for CANNOT_VERIFY, navy for HUMAN_REVIEW) applied
+everywhere those states appear. No new dependency was added: table cell
+coloring uses pandas' own `Styler` (already an approved dependency, ADR
+stack list in claude.md), not a new charting/UI library. Emoji were
+removed in favor of the badge system and typography for signaling state.
+`FINAL` and `HUMAN_REVIEW` get visually distinct banners so the latter
+reads as an explicit flagged stop, not an error.
+
+**Consequences:** Purely presentational - no session-state keys,
+function calls, or control flow in `app/main.py` changed; verified live
+that `streamlit run app/main.py` still starts cleanly and the full pytest
+suite still passes. The Extracted Clauses table's Confidence column is
+now colored against the project's real 0.6 threshold (ADR-006), so the
+UI visualizes actual harness logic rather than being purely decorative.

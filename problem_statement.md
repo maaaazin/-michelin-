@@ -1,7 +1,9 @@
 # WinWin — Problem Statement
 
-*(Working title. Formerly drafted as "ContractGuard"; repo directory is
-currently `-michelin-`. See [decisions.md](decisions.md) ADR-001.)*
+*(Final name for the demo. The project was drafted as "ContractGuard,"
+built under the working title "Warden," and renamed to "WinWin" ahead of
+the live demo; repo directory is still `-michelin-` and stays that way.
+See [decisions.md](decisions.md) ADR-001 and ADR-013.)*
 
 ## 1. The Problem
 
@@ -259,6 +261,13 @@ red-teaming, negotiation state, failure recovery, and human escalation.
 
 ## 11. Demo Scenario
 
+The scenario below was the original plan; see
+[architecture.md](architecture.md) Section 11 for what actually shipped -
+six real vendor-contract and policy PDFs in `/test_docs`, each built to
+exercise a specific harness mechanism (a genuinely clean contract, a
+deliberately contradictory one, a straightforward policy-violation one,
+and so on), run against the real compiled graph.
+
 **Vendor contract:** annual fee Rs 20 lakh, escalation 8%, payment Net 15,
 termination 180 days, liability Rs 2 lakh, SLA 99.5%.
 
@@ -266,14 +275,15 @@ termination 180 days, liability Rs 2 lakh, SLA 99.5%.
 max 60 days, liability at least the annual contract value, SLA min 99.9%.
 
 **Adversarial contradiction:** Section 4.2 caps escalation at 5%; Appendix
-B lets the vendor raise fees up to 15% at renewal.
+B lets the vendor raise fees up to 15% at renewal. This is what
+`contradictory_contract_demo.pdf` demonstrates for real.
 
-Run a traditional single-LLM baseline first, showing where the
-architecture has no structural enforcement. Then run WinWin and show: the
-negotiation agent proposes 8%, the policy gate blocks it, the system
-replans, red-team review runs, the policy gate passes, and a final
-approved proposal comes out, with the contradiction flagged for human
-sign-off along the way.
+The comparison-mode "traditional single-LLM baseline" side-by-side was
+not built (it remained a stretch goal - ADR-009); the live demo runs
+WinWin directly: the negotiation agent proposes an out-of-policy move,
+the policy gate blocks it, the system replans, red-team review runs, and
+either a final approved proposal comes out or - after 3 replan attempts -
+the run escalates to human review with exactly what's still unresolved.
 
 The point is not that a particular model will always fail. The point is
 that a traditional LLM workflow *relies* on the model behaving correctly,
