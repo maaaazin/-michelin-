@@ -1,7 +1,9 @@
-import streamlit as st
-import pandas as pd
-from pathlib import Path
+import html
 import sys
+from pathlib import Path
+
+import pandas as pd
+import streamlit as st
 
 # Add project root to sys.path so we can import harness and agents
 sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -15,7 +17,7 @@ from schemas import CheckStatus, NegotiationStage, PolicyRuleSource
 
 st.set_page_config(
     page_title="WinWin | Vendor Contract Negotiation",
-    page_icon="⚖️",
+    page_icon="⚖",
     layout="wide",
 )
 
@@ -24,11 +26,29 @@ css_path = Path(__file__).parent / "style.css"
 if css_path.exists():
     st.markdown(f"<style>{css_path.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
-st.title("⚖️ WinWin")
+_STATUS_CLASS = {
+    "PASS": "status-pass",
+    "ACCEPT": "status-pass",
+    "BLOCKED": "status-blocked",
+    "REJECT": "status-blocked",
+    "CONFLICTING": "status-conflicting",
+    "CANNOT_VERIFY": "status-cannot_verify",
+    "LOW_CONFIDENCE": "status-low_confidence",
+    "FLAG": "status-conflicting",
+}
+
+
+def _badge(value: str) -> str:
+    css_class = _STATUS_CLASS.get(value, "status-cannot_verify")
+    return f'<span class="status-badge {css_class}">{html.escape(value)}</span>'
+
+
+st.title("WinWin")
 st.markdown(
-    "WinWin lets AI negotiate vendor contracts, but puts every AI-generated "
-    "negotiation move through an enforceable policy, evidence, and "
-    "independent-review harness before allowing it to proceed."
+    '<div class="app-subtitle">WinWin lets AI negotiate vendor contracts, but puts every '
+    "AI-generated negotiation move through an enforceable policy, evidence, and "
+    "independent-review harness before allowing it to proceed.</div>",
+    unsafe_allow_html=True,
 )
 
 # --- Session state ---
@@ -51,7 +71,7 @@ def _pdf_text(uploaded_file) -> str:
 
 
 # --- Uploads ---
-with st.expander("⚙️ Uploads", expanded=st.session_state.final_state is None):
+with st.expander("Uploads", expanded=st.session_state.final_state is None):
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("1. Vendor Contract (required)")
@@ -81,7 +101,7 @@ if st.session_state.policy_file is not None and st.session_state.extracted_polic
         st.rerun()
 
 if st.session_state.extracted_policy is not None and not st.session_state.policy_confirmed:
-    st.subheader("📋 Extracted Company Policy — review before running")
+    st.subheader("Extracted Company Policy — review before running")
     rows = []
     for rule in st.session_state.extracted_policy.rules:
         rows.append(
@@ -89,17 +109,21 @@ if st.session_state.extracted_policy is not None and not st.session_state.policy
                 "Rule": rule.clause_type,
                 "Target": rule.target_value,
                 "Hard limit": rule.hard_limit_value,
-                "Confidence": f"{rule.confidence:.2f}",
-                "Source": "📄 Extracted" if rule.source == PolicyRuleSource.EXTRACTED else "⚙️ Default fallback",
+                "Confidence": rule.confidence,
+                "Source": "Extracted" if rule.source == PolicyRuleSource.EXTRACTED else "Default fallback",
             }
         )
-    st.dataframe(pd.DataFrame(rows), use_container_width=True)
+    policy_df = pd.DataFrame(rows)
+    styled_policy = policy_df.style.map(
+        lambda v: "color: #1F7A4D;" if v == "Extracted" else "color: #8A93A1;", subset=["Source"]
+    ).format({"Confidence": "{:.2f}"})
+    st.dataframe(styled_policy, use_container_width=True)
     fallback_count = sum(
         1 for r in st.session_state.extracted_policy.rules if r.source == PolicyRuleSource.DEFAULT_FALLBACK
     )
     if fallback_count:
         st.warning(f"{fallback_count} rule(s) used the default fallback - not confidently found in the document.")
-    if st.button("✅ Confirm and continue with this policy", type="primary"):
+    if st.button("Confirm and continue with this policy", type="primary"):
         st.session_state.policy_confirmed = True
         st.rerun()
     st.info("Review the extracted policy above and confirm before running the negotiation.")
@@ -109,11 +133,11 @@ policy_gated = st.session_state.policy_file is not None and not st.session_state
 can_run = contract_ready and not policy_gated
 
 if not contract_ready:
-    st.info("👈 Upload a vendor contract PDF to begin.")
+    st.info("Upload a vendor contract PDF to begin.")
 elif policy_gated:
-    st.info("👆 Extract and confirm the company policy above before running the negotiation.")
+    st.info("Extract and confirm the company policy above before running the negotiation.")
 else:
-    if st.button("🚀 Run WinWin", type="primary", use_container_width=True, disabled=not can_run):
+    if st.button("Run WinWin", type="primary", use_container_width=True, disabled=not can_run):
         with st.spinner("Running the WinWin pipeline (contract analysis, policy check, reviews, negotiation, red-team, replan loop)..."):
             contract_text = _pdf_text(st.session_state.contract_file)
             effective_policy = st.session_state.extracted_policy or load_policy_config()
@@ -138,12 +162,16 @@ if final_state is not None:
     m3.metric("Conflicts needing sign-off", num_conflicting)
     m4.metric("Replan attempts used", f"{final_state.replan_count} / 3")
 
-    tab1, tab2, tab3 = st.tabs(["📜 Audit Trail", "📄 Extracted Clauses", "🤝 Outcome"])
+    tab1, tab2, tab3 = st.tabs(["Audit Trail", "Extracted Clauses", "Outcome"])
 
     with tab1:
         st.subheader("Audit Trail")
-        for entry in final_state.negotiation_history:
-            st.text(f"• {entry['event']}")
+        lines = "".join(
+            f'<div class="audit-line"><span class="audit-index">{i}.</span>'
+            f'<span>{html.escape(entry["event"])}</span></div>'
+            for i, entry in enumerate(final_state.negotiation_history, start=1)
+        )
+        st.markdown(f'<div class="audit-log">{lines}</div>', unsafe_allow_html=True)
 
     with tab2:
         st.subheader("Extracted Clauses")
@@ -153,16 +181,27 @@ if final_state is not None:
                 "Value": "Not specified" if c.not_specified else str(c.vendor_value),
                 "Unit": c.unit or "-",
                 "Section": c.source_section or "-",
-                "Confidence": f"{c.confidence:.2f}",
+                "Confidence": c.confidence,
             }
             for c in final_state.extracted_clauses
         ]
-        st.dataframe(pd.DataFrame(clause_rows), use_container_width=True)
+        clause_df = pd.DataFrame(clause_rows)
+        styled_clauses = clause_df.style.map(
+            lambda v: "color: #1F7A4D; font-weight: 600;" if v >= 0.6 else "color: #A85E00; font-weight: 600;",
+            subset=["Confidence"],
+        ).format({"Confidence": "{:.2f}"})
+        st.dataframe(styled_clauses, use_container_width=True)
 
     with tab3:
         st.subheader("Outcome")
         if final_state.current_state == NegotiationStage.FINAL:
-            st.success("✅ Final proposal approved.")
+            st.markdown(
+                '<div class="outcome-banner final">'
+                '<div class="outcome-title">Final proposal approved</div>'
+                '<div class="outcome-detail">Every policy check passed and the Red-Team review accepted the proposal.</div>'
+                "</div>",
+                unsafe_allow_html=True,
+            )
             proposal = final_state.current_offer
             if proposal:
                 st.write(f"**Rationale:** {proposal.rationale}")
@@ -176,22 +215,39 @@ if final_state is not None:
                     for k, v in (proposal.requested_changes or {"None": "-"}).items():
                         st.write(f"- **{k}**: {v}")
         elif final_state.current_state == NegotiationStage.HUMAN_REVIEW:
-            st.error("🛑 Escalated to Human Review — the replan loop could not reach an approvable proposal.")
+            st.markdown(
+                '<div class="outcome-banner human-review">'
+                '<div class="outcome-title">Escalated to human review</div>'
+                '<div class="outcome-detail">The replan loop reached its limit without an approvable proposal. '
+                "This is an explicit stop, not a system failure - a person needs to review and decide.</div>"
+                "</div>",
+                unsafe_allow_html=True,
+            )
             final_gate = run_policy_check(
                 final_state.extracted_clauses, final_state.constraints, proposal=final_state.current_offer
             )
             unresolved = [r for r in final_gate if r.status in (CheckStatus.BLOCKED, CheckStatus.CONFLICTING)]
             if unresolved:
-                st.write("**Still unresolved:**")
+                st.markdown('<div class="section-label">Still unresolved</div>', unsafe_allow_html=True)
                 for r in unresolved:
-                    st.warning(f"**{r.clause_type}** ({r.status.value}): {r.reason}")
+                    border_class = "conflicting" if r.status == CheckStatus.CONFLICTING else ""
+                    st.markdown(
+                        f'<div class="unresolved-rule {border_class}">'
+                        f'<span class="rule-name">{html.escape(r.clause_type)}</span>{_badge(r.status.value)}'
+                        f'<div class="rule-reason">{html.escape(r.reason)}</div>'
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
             red_team_reviews = [rv for rv in final_state.agent_reviews if rv.agent_name == "Red-Team Agent"]
             if red_team_reviews and red_team_reviews[-1].verdict.value == "REJECT":
-                st.write("**Red-Team's last objection:**")
-                st.warning(red_team_reviews[-1].reasoning)
+                st.markdown('<div class="section-label">Red-Team\'s last objection</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="unresolved-rule">{html.escape(red_team_reviews[-1].reasoning)}</div>',
+                    unsafe_allow_html=True,
+                )
             if final_state.current_offer:
-                st.write("**Last proposal attempted:**")
-                st.json(final_state.current_offer.model_dump())
+                with st.expander("Last proposal attempted (raw)"):
+                    st.json(final_state.current_offer.model_dump())
         else:
             st.warning(f"Unexpected terminal state: {final_state.current_state.value}")
 
@@ -199,4 +255,9 @@ if final_state is not None:
         st.subheader("Agent Reviews")
         for review in final_state.agent_reviews:
             if review.agent_name in ("Legal/Risk Agent", "Business/Finance Agent"):
-                st.info(f"**{review.agent_name} ({review.verdict.value}):**\n\n{review.reasoning}")
+                st.markdown(
+                    f'<div class="unresolved-rule"><span class="rule-name">{html.escape(review.agent_name)}</span>'
+                    f"{_badge(review.verdict.value)}"
+                    f'<div class="rule-reason">{html.escape(review.reasoning)}</div></div>',
+                    unsafe_allow_html=True,
+                )

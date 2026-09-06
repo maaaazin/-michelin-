@@ -1,104 +1,291 @@
-/* WinWin Corporate Light Theme */
+/* WinWin - clean internal enterprise tool theme.
+   One accent (muted steel blue) + a fixed color-coded status system used
+   consistently for PASS/BLOCKED/CONFLICTING/CANNOT_VERIFY/LOW_CONFIDENCE/
+   HUMAN_REVIEW everywhere those states appear in the app. */
 
-/* General Background and Typography */
-.stApp {
-    background-color: #FAFAFA;
-    font-family: 'Inter', 'Roboto', sans-serif;
-    color: #1E293B;
+:root {
+    --bg: #F5F6F8;
+    --surface: #FFFFFF;
+    --border: #DFE3E8;
+    --text-primary: #1B2430;
+    --text-secondary: #5B6472;
+    --text-muted: #8A93A1;
+
+    --accent: #2F5D8A;
+    --accent-hover: #24486D;
+    --accent-soft: #EAF1F7;
+
+    --status-pass-bg: #E5F3EA;
+    --status-pass-text: #1F7A4D;
+    --status-blocked-bg: #FBEAEA;
+    --status-blocked-text: #B3261E;
+    --status-conflicting-bg: #FCF0DE;
+    --status-conflicting-text: #A85E00;
+    --status-cannot-verify-bg: #EEF0F3;
+    --status-cannot-verify-text: #5B6472;
+    --status-low-confidence-bg: #FBF3D6;
+    --status-low-confidence-text: #8A6200;
+    --status-human-review-bg: #EAF0F7;
+    --status-human-review-text: #2F5D8A;
 }
 
-/* Hide Streamlit branding elements */
+/* Base */
+.stApp {
+    background-color: var(--bg);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text-primary);
+}
+
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
 
-/* Style the top header and text */
-h1, h2, h3, h4, h5, h6 {
-    color: #0F172A;
+/* Typography hierarchy */
+h1 {
+    color: var(--text-primary);
+    font-weight: 650;
+    font-size: 1.9rem;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.2rem;
+}
+h2, h3 {
+    color: var(--text-primary);
+    font-weight: 600;
+    letter-spacing: -0.005em;
+}
+h4, h5, h6 {
+    color: var(--text-primary);
     font-weight: 600;
 }
+p, li, .stMarkdown {
+    color: var(--text-secondary);
+    line-height: 1.55;
+}
 
-/* Metric Cards */
+/* App subtitle line under the title */
+.app-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    max-width: 62rem;
+    margin-bottom: 1.4rem;
+}
+
+/* Section spacing */
+.section-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.35rem;
+}
+
+/* Metric cards */
+[data-testid="stMetric"] {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem 1rem;
+}
 [data-testid="stMetricValue"] {
-    font-size: 2rem !important;
+    font-size: 1.7rem !important;
     font-weight: 700;
-    color: #0369A1; /* Professional Blue */
+    color: var(--accent);
 }
 [data-testid="stMetricLabel"] {
-    font-size: 0.9rem;
-    font-weight: 500;
-    color: #64748B;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
 
-/* Expander styling */
-.streamlit-expanderHeader {
-    background-color: #FFFFFF;
-    border: 1px solid #E2E8F0;
+/* Expander */
+.streamlit-expanderHeader, [data-testid="stExpander"] summary {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
-    font-weight: 500;
-    color: #0F172A;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+[data-testid="stExpander"] {
+    border-radius: 8px;
 }
 
 /* Tabs */
 .stTabs [data-baseweb="tab-list"] {
-    gap: 2rem;
+    gap: 1.6rem;
+    border-bottom: 1px solid var(--border);
 }
 .stTabs [data-baseweb="tab"] {
-    height: 3rem;
+    height: 2.6rem;
     white-space: pre-wrap;
     background-color: transparent;
-    border-radius: 4px 4px 0px 0px;
-    gap: 1rem;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    color: #475569;
+    border-radius: 0;
+    color: var(--text-secondary);
+    font-weight: 500;
 }
 .stTabs [aria-selected="true"] {
-    color: #0369A1 !important;
-    border-bottom: 3px solid #0369A1 !important;
+    color: var(--accent) !important;
+    border-bottom: 2px solid var(--accent) !important;
     font-weight: 600;
 }
 
-/* Buttons */
+/* Buttons - one accent color, everywhere */
 .stButton > button {
-    background-color: #0369A1;
+    background-color: var(--accent);
     color: white;
     font-weight: 600;
     border: none;
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 1.1rem;
     border-radius: 6px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    transition: all 0.2s ease-in-out;
+    box-shadow: none;
+    transition: background-color 0.15s ease-in-out;
 }
 .stButton > button:hover {
-    background-color: #0284C7;
-    border-color: #0284C7;
+    background-color: var(--accent-hover);
     color: white;
-    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+}
+.stButton > button[kind="secondary"] {
+    background-color: var(--surface);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+}
+.stButton > button[kind="secondary"]:hover {
+    background-color: var(--accent-soft);
 }
 
-/* Dataframe formatting */
+/* Dataframe */
+[data-testid="stDataFrame"] {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
 .dataframe {
     border-collapse: collapse;
     width: 100%;
 }
 .dataframe th {
     background-color: #F8FAFC;
-    color: #475569;
+    color: var(--text-secondary);
     font-weight: 600;
     text-align: left;
-    padding: 12px;
-    border-bottom: 2px solid #E2E8F0;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 .dataframe td {
-    padding: 12px;
-    border-bottom: 1px solid #E2E8F0;
-    color: #1E293B;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+    font-size: 0.9rem;
 }
 
-/* Success/Error Alerts styling overrides if needed, using defaults for now but ensuring they look clean */
+/* Alerts */
 div[data-baseweb="notification"] {
     border-radius: 6px;
+}
+
+/* Audit trail log */
+.audit-log {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
+    font-size: 0.83rem;
+    line-height: 1.7;
+    color: var(--text-primary);
+    max-height: 32rem;
+    overflow-y: auto;
+}
+.audit-log .audit-line {
+    display: flex;
+    gap: 0.6rem;
+    padding: 2px 0;
+    border-bottom: 1px solid #F0F1F3;
+}
+.audit-log .audit-line:last-child {
+    border-bottom: none;
+}
+.audit-log .audit-index {
+    color: var(--text-muted);
+    flex-shrink: 0;
+    min-width: 1.6rem;
+    text-align: right;
+}
+
+/* Status badges - the one consistent color system for PASS / BLOCKED /
+   CONFLICTING / CANNOT_VERIFY / LOW_CONFIDENCE / HUMAN_REVIEW */
+.status-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+.status-pass { background-color: var(--status-pass-bg); color: var(--status-pass-text); }
+.status-blocked { background-color: var(--status-blocked-bg); color: var(--status-blocked-text); }
+.status-conflicting { background-color: var(--status-conflicting-bg); color: var(--status-conflicting-text); }
+.status-cannot_verify { background-color: var(--status-cannot-verify-bg); color: var(--status-cannot-verify-text); }
+.status-low_confidence { background-color: var(--status-low-confidence-bg); color: var(--status-low-confidence-text); }
+.status-human_review { background-color: var(--status-human-review-bg); color: var(--status-human-review-text); }
+
+/* Outcome banners - FINAL reads as resolved/positive, HUMAN_REVIEW reads
+   as an explicit flagged stop state, not an error */
+.outcome-banner {
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 1rem;
+    border: 1px solid transparent;
+}
+.outcome-banner.final {
+    background-color: var(--status-pass-bg);
+    border-color: #C6E6D2;
+}
+.outcome-banner.final .outcome-title {
+    color: var(--status-pass-text);
+}
+.outcome-banner.human-review {
+    background-color: var(--status-human-review-bg);
+    border-color: #C9D9EA;
+}
+.outcome-banner.human-review .outcome-title {
+    color: var(--status-human-review-text);
+}
+.outcome-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+    margin-bottom: 0.15rem;
+}
+.outcome-detail {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/* Unresolved-rule list on a HUMAN_REVIEW outcome */
+.unresolved-rule {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--status-blocked-text);
+    border-radius: 4px;
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 0.5rem;
+}
+.unresolved-rule.conflicting {
+    border-left-color: var(--status-conflicting-text);
+}
+.unresolved-rule .rule-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-right: 0.5rem;
+}
+.unresolved-rule .rule-reason {
+    color: var(--text-secondary);
+    font-size: 0.88rem;
 }
