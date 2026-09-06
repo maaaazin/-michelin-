@@ -65,8 +65,9 @@ def _format_context(
     policy_results: List[PolicyCheckResult],
     legal_review: AgentReview,
     business_review: AgentReview,
+    replan_context: Optional[str] = None,
 ) -> str:
-    return (
+    context = (
         "Extracted contract clauses:\n"
         f"{json.dumps([c.model_dump(mode='json') for c in clauses], indent=2)}\n\n"
         "Policy check results:\n"
@@ -76,6 +77,9 @@ def _format_context(
         "Business/Finance Agent review:\n"
         f"{business_review.model_dump_json(indent=2)}"
     )
+    if replan_context:
+        context += f"\n\n{replan_context}"
+    return context
 
 
 def negotiate(
@@ -84,6 +88,7 @@ def negotiate(
     legal_review: AgentReview,
     business_review: AgentReview,
     client: Optional[OpenAI] = None,
+    replan_context: Optional[str] = None,
 ) -> NegotiationProposal:
     """Produce a NegotiationProposal grounded in the given evidence.
 
@@ -91,13 +96,17 @@ def negotiate(
     accepting the result - a grounding failure is fed back to the model
     exactly like a schema validation failure, with one retry before
     raising NegotiationAgentError.
+
+    replan_context, if given, is appended to the prompt - the harness
+    graph passes the prior rejection reason here so a replanned proposal
+    is told exactly what failed and why, per architecture.md's example.
     """
     client = client or OpenAI()
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": _format_context(clauses, policy_results, legal_review, business_review),
+            "content": _format_context(clauses, policy_results, legal_review, business_review, replan_context),
         },
     ]
 

@@ -15,7 +15,10 @@ from .policy import PolicyCheckResult, PolicyConfig
 
 
 class NegotiationStage(str, Enum):
-    """The state machine stages from architecture.md, Section 6."""
+    """The state machine stages from architecture.md, Section 6, plus
+    HUMAN_REVIEW: the graceful-degradation terminal state when the
+    replan loop exceeds its attempt limit (harness/graph.py).
+    """
 
     CONTRACT_ANALYSIS = "CONTRACT_ANALYSIS"
     POLICY_CHECK = "POLICY_CHECK"
@@ -24,6 +27,7 @@ class NegotiationStage(str, Enum):
     POLICY_GATE = "POLICY_GATE"
     REPLAN = "REPLAN"
     FINAL = "FINAL"
+    HUMAN_REVIEW = "HUMAN_REVIEW"
 
 
 class ReviewVerdict(str, Enum):
@@ -74,6 +78,14 @@ class NegotiationState(BaseModel):
     negotiation_id: str
     contract_id: str
     policy_version: str
+    contract_text: Optional[str] = Field(
+        default=None,
+        description="Raw contract text for the graph's first node (Contract Analyst) to read.",
+    )
+    replan_count: int = Field(
+        default=0,
+        description="Replan iterations used so far - the graph's max-replan safeguard reads this.",
+    )
     current_offer: Optional[NegotiationProposal] = None
     vendor_position: Dict[str, ClauseValue] = Field(default_factory=dict)
     company_position: Dict[str, ClauseValue] = Field(default_factory=dict)
