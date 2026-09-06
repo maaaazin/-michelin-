@@ -13,7 +13,7 @@ from typing import List, Optional
 from openai import OpenAI
 from pydantic import BaseModel, Field, ValidationError
 
-from harness.config import OPENAI_MODEL
+from harness.config import OPENAI_API_KEY, OPENAI_MODEL
 from schemas import AgentReview, Clause, NegotiationProposal, PolicyCheckResult, ReviewVerdict
 
 AGENT_NAME = "Red-Team Agent"
@@ -97,7 +97,7 @@ def review_red_team(
     Validates the model's output; retries once with the error fed back,
     then raises RedTeamAgentError rather than accepting bad output.
     """
-    client = client or OpenAI()
+    client = client or OpenAI(api_key=OPENAI_API_KEY)
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {

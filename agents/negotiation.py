@@ -19,7 +19,7 @@ from typing import List, Optional
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
 
-from harness.config import OPENAI_MODEL
+from harness.config import OPENAI_API_KEY, OPENAI_MODEL
 from harness.grounding_check import GroundingStatus, check_grounding
 from schemas import AgentReview, Clause, ClauseValue, NegotiationProposal, PolicyCheckResult
 
@@ -101,7 +101,7 @@ def negotiate(
     graph passes the prior rejection reason here so a replanned proposal
     is told exactly what failed and why, per architecture.md's example.
     """
-    client = client or OpenAI()
+    client = client or OpenAI(api_key=OPENAI_API_KEY)
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {

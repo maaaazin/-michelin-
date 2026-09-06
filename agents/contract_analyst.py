@@ -13,7 +13,7 @@ from typing import List, Optional, Set
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
 
-from harness.config import OPENAI_MODEL
+from harness.config import OPENAI_API_KEY, OPENAI_MODEL
 from schemas import Clause
 
 # Total attempts (1 initial + retries) before giving up on schema validity.
@@ -126,7 +126,7 @@ def extract_clauses(contract_text: str, client: Optional[OpenAI] = None) -> List
     MAX_ATTEMPTS - an unresolved cross-reference after all attempts is
     logged as a warning and returned as best-effort, not fatal.
     """
-    client = client or OpenAI()
+    client = client or OpenAI(api_key=OPENAI_API_KEY)
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": contract_text},

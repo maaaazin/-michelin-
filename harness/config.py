@@ -30,3 +30,8 @@ _load_dotenv_if_present()
 # The one place the model name lives (claude.md) - never hardcoded in agent logic.
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
+
+# The one place every agent reads its API key from - explicit, not a bare
+# OpenAI() relying on os.environ having been populated as a side effect of
+# this module happening to be imported first by something else.
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")

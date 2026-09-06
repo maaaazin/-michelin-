@@ -12,7 +12,7 @@ from typing import List, Optional
 from openai import OpenAI
 from pydantic import BaseModel, Field, ValidationError
 
-from harness.config import OPENAI_MODEL
+from harness.config import OPENAI_API_KEY, OPENAI_MODEL
 from schemas import AgentReview, Clause, PolicyCheckResult, ReviewVerdict
 
 AGENT_NAME = "Legal/Risk Agent"
@@ -70,7 +70,7 @@ def review_legal_risk(
     Validates the model's output; retries once with the error fed back,
     then raises LegalRiskAgentError rather than accepting bad output.
     """
-    client = client or OpenAI()
+    client = client or OpenAI(api_key=OPENAI_API_KEY)
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": _format_evidence(clauses, policy_results)},

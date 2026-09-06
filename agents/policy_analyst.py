@@ -21,7 +21,7 @@ from typing import Dict, List, Optional
 from openai import OpenAI
 from pydantic import BaseModel, Field, ValidationError
 
-from harness.config import OPENAI_MODEL
+from harness.config import OPENAI_API_KEY, OPENAI_MODEL
 from harness.policy_gate import load_policy_config
 from schemas import PolicyConfig, PolicyRule, PolicyRuleSource
 
@@ -106,7 +106,7 @@ def extract_policy(
     default_config = default_config or load_policy_config()
     defaults_by_type: Dict[str, PolicyRule] = {r.clause_type: r for r in default_config.rules}
 
-    client = client or OpenAI()
+    client = client or OpenAI(api_key=OPENAI_API_KEY)
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": policy_text},
