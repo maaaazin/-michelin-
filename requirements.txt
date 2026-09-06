@@ -1,0 +1,5 @@
+langgraph>=0.2
+google-genai>=0.5
+streamlit>=1.38
+pymupdf>=1.24
+pydantic>=2.8

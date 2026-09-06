@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Environment / secrets
+.env
+
+# Local databases (stretch goal: SQLite persistence)
+*.db
+
+# Streamlit
+.streamlit/
+
+# OS
+.DS_Store

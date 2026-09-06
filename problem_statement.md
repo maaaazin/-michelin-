@@ -1,479 +1,290 @@
-ContractGuard — Problem Statement
+# Warden — Problem Statement
 
-Title
+*(Working title. Formerly drafted as "ContractGuard"; repo directory is
+currently `-michelin-`. See [decisions.md](decisions.md) ADR-001.)*
 
-ContractGuard: A Policy-Enforced Agentic Harness for Vendor Contract Negotiation
+## 1. The Problem
 
-1. Problem
+Vendor contract negotiation is a high-impact business process covering
+pricing, payment terms, liability, termination, service levels, data
+ownership, renewals, and other contractual obligations.
 
-Vendor contract negotiation is a high-impact business process involving pricing, payment terms, liability, termination, service levels, data ownership, renewals, and other contractual obligations.
+Companies rarely negotiate without boundaries. Internal procurement,
+legal, finance, and business policy typically defines:
 
-Companies rarely negotiate without boundaries. They typically have internal procurement, legal, finance, and business policies that define:
+- preferred terms and acceptable ranges
+- hard limits that must never be crossed
+- non-negotiable clauses
+- conditions that require escalation or human approval
 
-preferred terms
+A representative policy:
 
-acceptable ranges
+| Term | Company rule |
+|---|---|
+| Price escalation | hard maximum 5% / year |
+| Payment terms | minimum Net 30 |
+| Termination notice | maximum 60 days |
+| Liability cap | at least the annual contract value |
+| SLA | minimum 99.9% uptime |
+| Data ownership | must remain with the company |
 
-hard limits
+Traditional LLM-based contract assistants can read a contract and generate
+a convincing negotiation recommendation, but they are not inherently
+reliable control systems. A single LLM call may:
 
-non-negotiable clauses
+- overlook important clauses
+- miss contradictions between sections
+- make unsupported assumptions
+- forget or reinterpret company policy mid-conversation
+- propose concessions beyond authorized limits
+- produce malformed or incomplete structured output
+- reinforce its own incorrect reasoning
+- continue past unresolved ambiguity instead of flagging it
+- lack persistent, auditable state across a multi-round negotiation
 
-escalation conditions
+The question is therefore not:
 
-requirements for human approval
-
-Traditional LLM-based contract assistants can read contracts and generate convincing negotiation recommendations, but they are not inherently reliable control systems.
-
-A single LLM may:
-
-overlook important clauses
-
-miss contradictions between sections
-
-make unsupported assumptions
-
-forget or reinterpret company policy
-
-propose concessions beyond authorized limits
-
-produce malformed or incomplete structured output
-
-reinforce its own incorrect reasoning
-
-continue despite unresolved ambiguity
-
-lack persistent, auditable state
-
-The fundamental problem is therefore not simply:
-
-"Can an LLM negotiate a contract?"
+> "Can an LLM negotiate a contract?"
 
 It is:
 
-"How can an LLM participate in contract negotiation without being trusted to enforce its own boundaries?"
+> "How can an LLM participate in contract negotiation without being
+> trusted to enforce its own boundaries?"
 
-2. Proposed Solution
+That question cannot be answered inside a single LLM call, no matter how
+good the prompt is: the same call that proposes a move is the one that
+would have to police it, using policy rules held only in its context
+window and evidence it may or may not have actually read correctly. There
+is no independent check between "the model said so" and "the move is
+allowed." Warden's answer is to move enforcement out of the prompt and
+into code that runs around the model.
 
-ContractGuard is an agentic contract negotiation system built around a dedicated harness.
+## 2. Proposed Solution
 
-Specialized AI agents perform reasoning tasks such as:
+Warden is an agentic contract negotiation system built around a
+deterministic harness.
 
-contract analysis
+Specialized agents perform reasoning tasks:
 
-legal/risk analysis
-
-financial/business analysis
-
-negotiation strategy generation
-
-independent red-team review
+- contract analysis (extraction)
+- legal/risk analysis
+- financial/business analysis
+- negotiation strategy generation
+- independent red-team review
 
 The harness surrounds these agents with deterministic controls for:
 
-company policy enforcement
+- company policy enforcement
+- evidence grounding
+- structured state
+- validation and retry handling
+- failure routing
+- audit logging
+- human escalation
 
-evidence grounding
+Central design principle:
 
-structured state
+> **The LLM proposes; the harness verifies and decides whether the
+> proposal is allowed to proceed.**
 
-permissions
+## 3. Worked Example
 
-validation
+Company policy: escalation max 5%, payment min Net 30, termination max 60
+days, SLA min 99.9%.
 
-retry handling
+Vendor contract: escalation 8%, payment Net 15, termination 180 days, SLA
+99.5%.
 
-failure routing
+A negotiation agent might propose:
 
-audit logging
+> "Accept 8% annual escalation in exchange for Net 60 payment terms."
 
-human escalation
+A traditional LLM workflow may accept this as a reasonable-sounding
+compromise. Warden intercepts it instead:
 
-The central design principle is:
-
-The LLM proposes; the harness verifies and decides whether the proposal is allowed to proceed.
-
-3. Example
-
-Suppose a company's policy says:
-
-Annual price escalation:
-Hard maximum = 5%
-
-Payment:
-Minimum = Net 30
-
-Termination:
-Maximum = 60 days
-
-SLA:
-Minimum = 99.9%
-
-A vendor proposes:
-
-Annual price escalation = 8%
-Payment = Net 15
-Termination = 180 days
-SLA = 99.5%
-
-The negotiation agent might propose:
-
-"Accept 8% annual escalation in exchange for Net 60 payment terms."
-
-A traditional LLM workflow may produce this as a reasonable compromise.
-
-ContractGuard intercepts it:
-
+```
 POLICY GATE
-
 Proposed escalation: 8%
-Company maximum: 5%
-
-❌ BLOCKED
-
-Reason:
-Hard policy constraint violated.
-
-The harness records the violation and sends the workflow back for replanning.
-
-The negotiation agent may then produce:
-
-5% escalation
-Net 60 payment
-30-day termination
-99.9% SLA
-
-The harness validates the new proposal and allows it to continue if it passes all required checks.
-
-4. Why a Harness Is Required
-
-A conventional agent architecture looks like:
-
-User
-  |
-  v
-LLM
-  |
-  v
-Tools
-  |
-  v
-Answer
-
-The model is responsible for both:
-
-reasoning about the task, and
-
-following the rules governing the task.
-
-This creates a dangerous coupling.
-
-ContractGuard separates these responsibilities:
-
-LLM:
-Reason
-Analyze
-Propose
-Negotiate
-
-HARNESS:
-Validate
-Enforce
-Track state
-Check evidence
-Block
-Retry
-Replan
-Escalate
-Audit
-
-This means the system does not depend on the LLM remembering every rule correctly.
-
-5. Why Traditional LLM Agents Can Fail
-
-Failure 1 — Policy drift
-
-The model may understand a 5% maximum early in the interaction but later propose 8% because it considers the concession commercially attractive.
-
-Failure 2 — Unsupported claims
-
-The model may state that a contract provides a 99.9% SLA when the contract actually says 99.5%.
-
-Failure 3 — Contradictory clauses
-
-The contract may contain:
-
-Section 4.2 → 5% maximum increase
-Appendix B  → 15% increase at renewal
-
-A single agent may overlook or silently resolve the contradiction.
-
-Failure 4 — Self-verification
-
-The same agent that creates a negotiation strategy may also decide that the strategy is correct.
-
-This creates a weak feedback loop:
-
-LLM proposes
-   ↓
-LLM reviews itself
-   ↓
-LLM approves itself
-
-ContractGuard instead uses independent review.
-
-Failure 5 — Agent/tool failure
-
-PDF extraction, API calls, or structured generation may fail.
-
-A conventional workflow may terminate.
-
-ContractGuard can retry, fall back, or escalate.
-
-Failure 6 — Memory/state drift
-
-A long negotiation can contain many offers, rejections, and concessions.
-
-Relying on conversational context alone makes it difficult to guarantee that every agent sees the same authoritative state.
-
-ContractGuard stores negotiation state separately from the LLM.
-
-6. Core Features
-
-6.1 Contract Intelligence
-
-Extract important clauses into structured evidence.
-
-6.2 Company Negotiation Playbook
-
-Represent company rules as structured policy.
-
-6.3 Multi-Agent Analysis
-
-Use specialized agents rather than one model performing every role.
-
-6.4 Deterministic Policy Gate
-
-Hard constraints are checked programmatically.
-
-6.5 Evidence Grounding
-
-Negotiation claims must reference contract evidence.
-
-6.6 Independent Red Team
-
-A separate agent challenges proposed negotiation moves.
-
-6.7 Persistent Negotiation Memory
-
-Store offers, responses, violations, decisions, and state.
-
-6.8 Failure Recovery
-
-Different failure types receive different recovery strategies.
-
-6.9 Human Escalation
-
-Unresolved ambiguity or disagreement results in human review rather than fabricated certainty.
-
-6.10 Auditability
-
-Every important decision can be traced to:
-
-Decision
-   ↓
-Agent proposal
-   ↓
-Policy check
-   ↓
-Evidence
-   ↓
-Review
-   ↓
-Final outcome
-
-7. Primary User
-
-The primary users are organizations that negotiate contracts with external vendors, particularly:
-
-procurement teams
-
-sourcing teams
-
-legal operations
-
-finance/procurement operations
-
-enterprise vendor-management teams
-
-8. Primary User Journey
-
-1. Upload vendor contract
-          ↓
-2. Load company negotiation policy
-          ↓
-3. Extract and normalize clauses
-          ↓
-4. Identify risks and policy conflicts
-          ↓
-5. Generate negotiation strategy
-          ↓
-6. Generate proposed counteroffer
-          ↓
-7. Policy Gate
-          |
-       +--+--+
-       |     |
-      PASS  FAIL
-       |     |
-       |   REPLAN
-       |     |
-       |     +----> New proposal
-       |
-       v
-8. Independent Red-Team review
-          |
-       +--+--+
-       |     |
-      PASS  FAIL
-       |     |
-       |   REPLAN
-       |
-       v
-9. Final negotiation recommendation
-          ↓
-10. Audit log
-
-9. Hackathon Differentiation
-
-Contract analysis and AI contract review already exist.
-
-ContractGuard is differentiated by focusing on the execution harness.
-
-The project is not:
-
-"An AI that reads contracts."
-
-It is:
-
-"A controlled environment in which AI agents can negotiate contracts while the system independently enforces business boundaries."
-
-The important innovation is therefore the combination of:
-
-Multi-agent reasoning
-        +
-Deterministic policy enforcement
-        +
-Evidence verification
-        +
-Independent red teaming
-        +
-Persistent state
-        +
-Failure recovery
-        +
-Human escalation
-
-10. Success Criteria
-
-The prototype should demonstrate that:
-
-Reliability
-
-Invalid proposals are blocked rather than silently accepted.
-
-Policy compliance
-
-Hard constraints cannot be overridden by an LLM.
-
-Evidence grounding
-
-Important claims can be traced back to contract clauses.
-
-Resilience
-
-Recoverable failures trigger retries or replanning.
-
-Graceful degradation
-
-Unresolved conflicts result in human review.
-
-Auditability
-
-The complete negotiation path can be inspected.
-
-Explainability
-
-The system can explain why a proposal was blocked, accepted, or escalated.
-
-11. Primary Hackathon Demo
-
-The demo should deliberately create a situation where a naive LLM workflow can produce a risky recommendation.
-
-Vendor contract
-
-Annual fee: ₹20 lakh
-Annual price escalation: 8%
-Payment: Net 15
-Termination: 180 days
-Liability: ₹2 lakh
-SLA: 99.5%
-
-Company policy
-
-Price escalation: maximum 5%
-Payment: minimum Net 30
-Termination: maximum 60 days
-Liability: minimum annual contract value
-SLA: minimum 99.9%
-
-Adversarial contradiction
-
-Section 4.2:
-Annual escalation shall not exceed 5%.
-
-Appendix B:
-Vendor may increase fees by up to 15% at renewal.
-
-Demonstration
-
-First run:
-
-TRADITIONAL LLM
-
-Show its recommendation and identify where the architecture lacks enforcement.
-
-Then run:
-
-CONTRACTGUARD
-
-Show:
-
-Agent proposes 8%
-        ↓
-Policy Gate
-        ↓
-❌ BLOCKED
-        ↓
-Replan
-        ↓
-New proposal
-        ↓
-Red Team
-        ↓
-✓ APPROVED
-
-The goal is not to prove that a particular model always fails.
-
-The goal is to demonstrate:
-
-A traditional LLM workflow relies on the model to behave correctly; ContractGuard structurally prevents invalid actions from proceeding.
-
-12. Core Message
-
-The project can be summarized in one sentence:
-
-ContractGuard lets AI negotiate vendor contracts, but puts every AI-generated negotiation move through an enforceable policy, evidence, and independent-review harness before allowing it to proceed.
-
-The key presentation line:
-
-"We don't make the model smarter. We make it harder for the model to make an unsafe decision."
+Company maximum:     5%
+BLOCKED - hard policy constraint violated
+```
+
+The harness records the violation and routes the workflow back to
+negotiation planning. The negotiation agent then produces a compliant
+proposal (5% escalation, Net 60, 30-day termination, 99.9% SLA), which the
+harness validates and allows to proceed.
+
+## 4. Why a Harness Is Required
+
+A conventional agent architecture is:
+
+```
+User -> LLM -> Tools -> Answer
+```
+
+The model is responsible for *both* reasoning about the task *and*
+following the rules governing the task. That coupling is the failure
+mode. Warden separates the two:
+
+| LLM does | Harness does |
+|---|---|
+| Reason, analyze, propose, negotiate | Validate, enforce, track state, check evidence, block, retry, replan, escalate, audit |
+
+The system does not depend on the model remembering every rule correctly,
+because the model is never the one deciding whether a rule was followed.
+
+## 5. Why a Single LLM Call Structurally Cannot Enforce This
+
+**Policy drift.** The model may understand a 5% maximum early in a
+conversation but propose 8% later because it judges the concession
+commercially attractive in the moment, with nothing forcing it to
+re-check the original constraint before speaking.
+
+**Unsupported claims.** The model may state the contract guarantees a
+99.9% SLA when the source text actually says 99.5%. Nothing separates "I
+recall reading X" from "X is literally quoted in the evidence."
+
+**Contradictory clauses.** A contract may contain Section 4.2 capping
+escalation at 5% and Appendix B allowing 15% at renewal. A single agent
+may silently pick one, or blend them into a number neither clause
+supports.
+
+**Self-verification.** The same agent that creates a negotiation strategy
+also deciding whether that strategy is sound is a closed loop: propose,
+review yourself, approve yourself. It has no independent signal to catch
+its own blind spots.
+
+**Silent gaps.** If the vendor contract never mentions a clause (for
+example, data ownership), a single LLM call will often just omit it too,
+or worse, assume a default, rather than surfacing "this term is absent
+and needs a decision."
+
+**Low-confidence evidence treated as fact.** An extraction that is only
+60% sure a clause means what it appears to mean can get relayed by the
+model with the same confidence as a clause quoted verbatim, because
+natural-language output does not carry a confidence score.
+
+**Tool/state failures.** PDF extraction or structured generation can fail
+outright. A conventional single-pass workflow has no retry or fallback
+path and simply produces a bad answer or crashes.
+
+**Memory/state drift.** A long negotiation involves many offers,
+rejections, and concessions. Relying on conversational context alone
+gives no guarantee that every agent is reasoning from the same
+authoritative state.
+
+Warden's edge-case handling targets the sharpest versions of these
+directly (see [architecture.md](architecture.md) Section 6 and
+[failures.md](failures.md)):
+
+1. A clause the vendor contract never mentions leads the extractor to
+   emit `NOT_SPECIFIED`; the policy gate flags "cannot verify" rather
+   than silently passing or failing it.
+2. Extracted evidence below a 0.6 confidence threshold is blocked from
+   use by the negotiation agent and flagged instead.
+3. Two clauses that contradict each other are detected by the harness,
+   which deterministically ties back to the more conservative,
+   company-favorable constraint for negotiation purposes, and flags the
+   conflict for human sign-off rather than silently picking a side.
+
+## 6. Core Features
+
+1. **Contract intelligence** — extract clauses into structured evidence.
+2. **Company negotiation playbook** — represent company rules as
+   structured policy, not prose.
+3. **Multi-agent analysis** — specialized agents instead of one model
+   performing every role.
+4. **Deterministic policy gate** — hard constraints checked in plain code.
+5. **Evidence grounding** — negotiation claims must cite contract
+   evidence.
+6. **Independent red team** — a separate agent challenges every proposed
+   move.
+7. **Negotiation state** — offers, responses, violations, and decisions
+   tracked outside the model's context window.
+8. **Failure recovery** — different failure types get different recovery
+   strategies (retry, replan, escalate).
+9. **Human escalation** — unresolved ambiguity or conflict produces a
+   flag for a person, never fabricated certainty.
+10. **Auditability** — every decision traces from proposal, through
+    policy check and evidence, through review, to final outcome.
+
+## 7. Primary User
+
+Procurement, sourcing, legal operations, and finance/procurement
+operations teams that negotiate contracts with external vendors.
+
+## 8. Primary User Journey
+
+```
+Upload vendor contract
+        |
+Load company negotiation policy
+        |
+Extract and normalize clauses (structured evidence)
+        |
+Policy check: identify risks, gaps, and conflicts
+        |
+Generate negotiation strategy / counteroffer
+        |
+Red-team review
+        |
+Policy gate  --FAIL--> replan negotiation strategy
+        |
+       PASS
+        |
+Final negotiation recommendation + audit log
+```
+
+## 9. Hackathon Differentiation
+
+Contract analysis and "AI contract review" tools already exist. Warden is
+differentiated by the execution harness, not the reading comprehension.
+
+Warden is not "an AI that reads contracts." It is a controlled environment
+in which AI agents can negotiate contracts while the system independently
+enforces business boundaries, combining multi-agent reasoning,
+deterministic policy enforcement, evidence verification, independent
+red-teaming, negotiation state, failure recovery, and human escalation.
+
+## 10. Success Criteria
+
+- **Reliability** — invalid proposals are blocked, not silently accepted.
+- **Policy compliance** — hard constraints cannot be overridden by an LLM.
+- **Evidence grounding** — claims trace back to contract clauses.
+- **Resilience** — recoverable failures trigger retries or replanning.
+- **Graceful degradation** — unresolved conflicts route to human review.
+- **Auditability** — the full negotiation path can be inspected.
+- **Explainability** — the system can explain why a proposal was blocked,
+  accepted, or escalated.
+
+## 11. Demo Scenario
+
+**Vendor contract:** annual fee Rs 20 lakh, escalation 8%, payment Net 15,
+termination 180 days, liability Rs 2 lakh, SLA 99.5%.
+
+**Company policy:** escalation max 5%, payment min Net 30, termination
+max 60 days, liability at least the annual contract value, SLA min 99.9%.
+
+**Adversarial contradiction:** Section 4.2 caps escalation at 5%; Appendix
+B lets the vendor raise fees up to 15% at renewal.
+
+Run a traditional single-LLM baseline first, showing where the
+architecture has no structural enforcement. Then run Warden and show: the
+negotiation agent proposes 8%, the policy gate blocks it, the system
+replans, red-team review runs, the policy gate passes, and a final
+approved proposal comes out, with the contradiction flagged for human
+sign-off along the way.
+
+The point is not that a particular model will always fail. The point is
+that a traditional LLM workflow *relies* on the model behaving correctly,
+while Warden *structurally prevents* invalid actions from proceeding
+regardless of what the model does.
+
+## 12. Core Message
+
+> Warden lets AI negotiate vendor contracts, but puts every AI-generated
+> negotiation move through an enforceable policy, evidence, and
+> independent-review harness before allowing it to proceed.
+
+Presentation line: **"We do not make the model smarter. We make it harder
+for the model to make an unsafe decision."**
