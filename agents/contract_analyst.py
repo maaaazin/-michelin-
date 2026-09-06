@@ -20,6 +20,14 @@ from schemas import Clause
 MAX_ATTEMPTS = 3
 
 _CROSS_REF_PATTERN = re.compile(r"\b(Section\s+[\dA-Za-z.]+|Appendix\s+[A-Z]+)\b", re.IGNORECASE)
+_LABEL_PREFIX = re.compile(r"^(section|appendix)\s+", re.IGNORECASE)
+
+
+def _normalize_label(label: str) -> str:
+    """Strip a leading 'Section '/'Appendix ' so '4.2' (a stored
+    source_section) and 'Section 4.2' (a regex match) compare equal.
+    """
+    return _LABEL_PREFIX.sub("", label.strip()).strip().lower()
 
 # Clause types the policy engine governs (data/policy_config.json). The
 # model may also return others; those just aren't checked against policy.
@@ -96,13 +104,13 @@ def _find_unaddressed_cross_references(clauses: List[Clause]) -> List[str]:
     never themselves used as a source_section - a sign the model named
     a cross-reference but never actually went and extracted it.
     """
-    covered: Set[str] = {c.source_section.strip().lower() for c in clauses if c.source_section}
+    covered: Set[str] = {_normalize_label(c.source_section) for c in clauses if c.source_section}
     referenced: Set[str] = set()
     for clause in clauses:
         if not clause.source_text:
             continue
         for match in _CROSS_REF_PATTERN.findall(clause.source_text):
-            if match.strip().lower() not in covered:
+            if _normalize_label(match) not in covered:
                 referenced.add(match.strip())
     return sorted(referenced)
 
