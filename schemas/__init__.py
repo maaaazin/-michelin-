@@ -14,6 +14,7 @@ from .policy import (
     PolicyCheckResult,
     PolicyConfig,
     PolicyRule,
+    PolicyRuleSource,
 )
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "ClauseValue",
     "ComparisonDirection",
     "PolicyRule",
+    "PolicyRuleSource",
     "PolicyConfig",
     "CheckStatus",
     "PolicyCheckResult",

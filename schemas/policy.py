@@ -26,6 +26,16 @@ class ComparisonDirection(str, Enum):
     EQUALS = "equals"
 
 
+class PolicyRuleSource(str, Enum):
+    """Where a PolicyRule's values came from - lets the harness tell a
+    document-grounded value apart from an assumed one (agents/policy_analyst.py).
+    """
+
+    DEFAULT = "default"  # unmodified data/policy_config.json value, no extraction attempted
+    EXTRACTED = "extracted"  # confidently pulled from an uploaded policy document
+    DEFAULT_FALLBACK = "default_fallback"  # extraction attempted but fell back to the config default
+
+
 class PolicyRule(BaseModel):
     """One company policy constraint for a single clause type."""
 
@@ -59,6 +69,16 @@ class PolicyRule(BaseModel):
             "constant. Used by liability_cap, whose floor is the contract's "
             "own annual_contract_value, not a fixed number."
         ),
+    )
+    confidence: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="1.0 for hand-authored defaults; the extractor's own score when source=extracted.",
+    )
+    source: PolicyRuleSource = Field(
+        default=PolicyRuleSource.DEFAULT,
+        description="Where target_value/hard_limit_value came from - see PolicyRuleSource.",
     )
 
 
