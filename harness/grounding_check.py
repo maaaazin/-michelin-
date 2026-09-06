@@ -15,6 +15,13 @@ from pydantic import BaseModel, Field
 
 from schemas import CheckStatus, Clause, NegotiationProposal, PolicyCheckResult
 
+# Matches comma-grouped numbers ("1,000,000") as one token before falling
+# back to plain digits - otherwise a comma splits a large figure into
+# fragments ("1", "000", "000") that never equal the clause's real value,
+# producing a false grounding failure on any rationale that writes a large
+# number the ordinary way.
+_NUMBER_PATTERN = re.compile(r"-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?")
+
 
 class GroundingStatus(str, Enum):
     PASSED = "PASSED"
@@ -60,7 +67,7 @@ def check_grounding(
     changing_types = set(proposal.concessions) | set(proposal.requested_changes)
     if policy_results:
         changing_types |= {r.clause_type for r in policy_results if r.status == CheckStatus.CONFLICTING}
-    rationale_numbers = {float(n) for n in re.findall(r"-?\d+(?:\.\d+)?", proposal.rationale)}
+    rationale_numbers = {float(n.replace(",", "")) for n in _NUMBER_PATTERN.findall(proposal.rationale)}
     contradicted: List[str] = []
     if rationale_numbers:
         for cid in proposal.supporting_clauses:

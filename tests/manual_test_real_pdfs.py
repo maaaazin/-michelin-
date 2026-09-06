@@ -2,14 +2,18 @@
 pipeline against the actual demo PDFs in test_docs/ - the first script to
 exercise harness.graph.run_negotiation() against real PDF text rather than
 a hardcoded sample string. Requires OPENAI_API_KEY in .env; makes real
-OpenAI calls for all 5 PDFs. Run:
+OpenAI calls for all 6 PDFs. Run:
 
     python tests/manual_test_real_pdfs.py
 
-Four of the five PDFs (happy_path_demo, failure_demo_policyViolation,
-contradictory_contract_demo, hidden_risk_demo) are vendor contracts, each
-run against the default data/policy_config.json - the same call app/main.py
-makes when no policy PDF is uploaded.
+Five of the six PDFs (clean_pass_demo, happy_path_demo,
+failure_demo_policyViolation, contradictory_contract_demo, hidden_risk_demo)
+are vendor contracts, each run against the default data/policy_config.json -
+the same call app/main.py makes when no policy PDF is uploaded.
+clean_pass_demo is a deliberately fully policy-compliant contract (see
+manual_test_clean_contract.py), added to give the demo set a genuine
+happy-path PDF that reaches FINAL, alongside contradictory_contract_demo
+for the contradiction-handling story.
 
 "playbook (1).pdf" is Apex Manufacturing's own vendor-negotiation playbook
 (a company policy document, not a contract) - it has no contract of its own
@@ -39,6 +43,7 @@ from schemas import CheckStatus, NegotiationStage, PolicyConfig, PolicyRuleSourc
 TEST_DOCS = Path(__file__).resolve().parent.parent / "test_docs"
 
 VENDOR_CONTRACTS = [
+    "clean_pass_demo.pdf",
     "happy_path_demo.pdf",
     "failure_demo_policyViolation.pdf",
     "contradictory_contract_demo.pdf",
