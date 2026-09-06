@@ -41,13 +41,18 @@ Concretely:
 
 ## Ask before adding a new dependency
 
-The approved stack is fixed for this build: `langgraph`, the Gemini SDK,
-`streamlit`, `pymupdf`, `pydantic` (see `requirements.txt`). Do not add a
-new package - including a "just this one small helper library" - without
-flagging it to the user first and getting a yes. This includes swapping
-in a different Gemini SDK package name than the one already pinned in
+The approved stack is fixed for this build: `langgraph`, the `openai`
+SDK, `streamlit`, `pymupdf`, `pydantic` (see `requirements.txt`). Do not
+add a new package - including a "just this one small helper library" -
+without flagging it to the user first and getting a yes. This includes
+swapping in a different LLM SDK package than the one already pinned in
 `requirements.txt`; if that package changes upstream, flag it rather than
 silently switching.
+
+The LLM provider is OpenAI (see [decisions.md](decisions.md) for the
+switch from an earlier Gemini plan). The model name is not hardcoded
+anywhere in agent logic - it lives in one config constant (env var
+`OPENAI_MODEL`, default `gpt-4o-mini`) so it can be changed in one place.
 
 Explicitly out of scope unless the user asks otherwise: FastAPI (ADR-002
 covers why), Kubernetes, vector databases, authentication/authorization

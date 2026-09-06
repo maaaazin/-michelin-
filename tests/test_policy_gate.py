@@ -1,0 +1,272 @@
+"""Unit tests for the deterministic policy engine (harness/policy_gate.py).
+
+Covers, at minimum, the cases the harness must get right per
+architecture.md / failures.md:
+  - a clean pass
+  - a hard-limit violation (the 8% vs 5% escalation example)
+  - a NOT_SPECIFIED clause
+  - a LOW_CONFIDENCE clause
+  - the contradiction tie-break (Section 4.2 vs Appendix B, 5% vs 15%)
+Plus a couple of extra cases (dynamic reference resolution for
+liability_cap, and a proposal overriding the raw vendor value) that
+exercise design decisions specific to this implementation.
+"""
+
+from pathlib import Path
+
+from schemas import (
+    CheckStatus,
+    Clause,
+    ComparisonDirection,
+    NegotiationProposal,
+    PolicyConfig,
+    PolicyRule,
+)
+from harness.policy_gate import (
+    CONFIDENCE_THRESHOLD,
+    evaluate_rule,
+    load_policy_config,
+    run_policy_check,
+)
+
+ESCALATION_RULE = PolicyRule(
+    clause_type="price_escalation",
+    target_value=3,
+    hard_limit_value=5,
+    direction=ComparisonDirection.MAX,
+    description="Annual price escalation must not exceed 5%.",
+)
+
+SLA_RULE = PolicyRule(
+    clause_type="sla_uptime",
+    target_value=99.9,
+    hard_limit_value=99.9,
+    direction=ComparisonDirection.MIN,
+    description="SLA uptime must be at least 99.9%.",
+)
+
+DATA_OWNERSHIP_RULE = PolicyRule(
+    clause_type="data_ownership",
+    target_value="company",
+    hard_limit_value="company",
+    direction=ComparisonDirection.EQUALS,
+    description="Data must remain owned by the company.",
+)
+
+LIABILITY_RULE = PolicyRule(
+    clause_type="liability_cap",
+    target_value="annual_contract_value",
+    hard_limit_value="annual_contract_value",
+    direction=ComparisonDirection.MIN,
+    description="Liability cap must be at least the annual contract value.",
+    reference_clause_type="annual_contract_value",
+)
+
+
+def test_clean_pass_within_policy():
+    clause = Clause(
+        clause_type="price_escalation",
+        vendor_value=4,
+        unit="percent",
+        source_section="4.1",
+        source_text="Annual fees may increase by up to 4%.",
+        confidence=0.95,
+    )
+    result = evaluate_rule(ESCALATION_RULE, [clause])
+    assert result.status == CheckStatus.PASS
+    assert result.checked_value == 4
+    assert result.hard_limit_value == 5
+
+
+def test_hard_limit_violation_8_percent_vs_5_percent_max():
+    clause = Clause(
+        clause_type="price_escalation",
+        vendor_value=8,
+        unit="percent",
+        source_section="4.2",
+        source_text="Annual fees may increase by 8%.",
+        confidence=0.96,
+    )
+    result = evaluate_rule(ESCALATION_RULE, [clause])
+    assert result.status == CheckStatus.BLOCKED
+    assert result.checked_value == 8
+    assert result.hard_limit_value == 5
+    assert "exceeds" in result.reason
+
+
+def test_not_specified_clause_is_cannot_verify_not_pass_or_fail():
+    clause = Clause(
+        clause_type="data_ownership",
+        not_specified=True,
+        confidence=0.9,
+    )
+    result = evaluate_rule(DATA_OWNERSHIP_RULE, [clause])
+    assert result.status == CheckStatus.CANNOT_VERIFY
+    assert result.checked_value is None
+
+
+def test_missing_clause_entirely_is_also_cannot_verify():
+    # No Clause at all for this clause_type - same treatment as an
+    # explicit NOT_SPECIFIED marker.
+    result = evaluate_rule(SLA_RULE, [])
+    assert result.status == CheckStatus.CANNOT_VERIFY
+
+
+def test_low_confidence_clause_is_blocked_from_use_as_fact():
+    clause = Clause(
+        clause_type="sla_uptime",
+        vendor_value=99.5,
+        unit="percent",
+        source_section="8.1",
+        source_text="Vendor guarantees roughly 99.5% uptime, terms unclear.",
+        confidence=0.4,  # below CONFIDENCE_THRESHOLD
+    )
+    assert clause.confidence < CONFIDENCE_THRESHOLD
+    result = evaluate_rule(SLA_RULE, [clause])
+    # Must NOT be silently treated as BLOCKED (99.5 < 99.9 would fail the
+    # hard-limit check) - low confidence takes precedence over PASS/BLOCKED.
+    assert result.status == CheckStatus.LOW_CONFIDENCE
+    assert result.checked_value is None
+
+
+def test_contradiction_tie_break_section_4_2_vs_appendix_b():
+    section_4_2 = Clause(
+        clause_type="price_escalation",
+        vendor_value=5,
+        unit="percent",
+        source_section="4.2",
+        source_text="Annual escalation shall not exceed 5%.",
+        confidence=0.95,
+    )
+    appendix_b = Clause(
+        clause_type="price_escalation",
+        vendor_value=15,
+        unit="percent",
+        source_section="Appendix B",
+        source_text="Vendor may increase fees by up to 15% at renewal.",
+        confidence=0.9,
+    )
+    result = evaluate_rule(ESCALATION_RULE, [section_4_2, appendix_b])
+
+    assert result.status == CheckStatus.CONFLICTING
+    assert result.requires_human_signoff is True
+    # Tie-break: MAX direction -> take the more conservative (lower) value.
+    assert result.checked_value == 5
+    assert "4.2" in result.reason
+    assert "Appendix B" in result.reason
+    assert "5" in result.reason and "15" in result.reason
+
+
+def test_contradiction_tie_break_min_direction_takes_higher_value():
+    # For a MIN-direction rule (higher is better for the company), the
+    # more company-favorable resolution is the larger of the two values.
+    low = Clause(
+        clause_type="sla_uptime",
+        vendor_value=99.5,
+        source_section="8.1",
+        source_text="...99.5%...",
+        confidence=0.9,
+    )
+    high = Clause(
+        clause_type="sla_uptime",
+        vendor_value=99.9,
+        source_section="Schedule C",
+        source_text="...99.9%...",
+        confidence=0.9,
+    )
+    result = evaluate_rule(SLA_RULE, [low, high])
+    assert result.status == CheckStatus.CONFLICTING
+    assert result.checked_value == 99.9
+
+
+def test_liability_cap_resolves_dynamic_reference_and_blocks():
+    annual_value = Clause(
+        clause_type="annual_contract_value",
+        vendor_value=2_000_000,
+        unit="INR",
+        source_section="1.1",
+        source_text="Total annual contract value: Rs 20,00,000.",
+        confidence=0.98,
+    )
+    liability = Clause(
+        clause_type="liability_cap",
+        vendor_value=200_000,
+        unit="INR",
+        source_section="9.3",
+        source_text="Vendor's total liability shall not exceed Rs 2,00,000.",
+        confidence=0.93,
+    )
+    result = evaluate_rule(LIABILITY_RULE, [annual_value, liability])
+    assert result.status == CheckStatus.BLOCKED
+    assert result.hard_limit_value == 2_000_000
+    assert result.checked_value == 200_000
+
+
+def test_liability_cap_cannot_verify_when_reference_missing():
+    liability = Clause(
+        clause_type="liability_cap",
+        vendor_value=200_000,
+        source_section="9.3",
+        source_text="Vendor's total liability shall not exceed Rs 2,00,000.",
+        confidence=0.93,
+    )
+    result = evaluate_rule(LIABILITY_RULE, [liability])
+    assert result.status == CheckStatus.CANNOT_VERIFY
+
+
+def test_proposal_overrides_vendor_value_for_the_gate_check():
+    # POLICY_GATE usage: the underlying vendor evidence is out of policy,
+    # but the negotiation agent's proposal brings it into compliance.
+    vendor_clause = Clause(
+        clause_type="price_escalation",
+        vendor_value=8,
+        unit="percent",
+        source_section="4.2",
+        source_text="Annual fees may increase by 8%.",
+        confidence=0.96,
+    )
+    proposal = NegotiationProposal(
+        concessions={"price_escalation": 5},
+        rationale="Counter-offer at the company's hard maximum.",
+        supporting_clauses=[],
+    )
+    result = evaluate_rule(ESCALATION_RULE, [vendor_clause], proposal=proposal)
+    assert result.status == CheckStatus.PASS
+    assert result.checked_value == 5
+
+
+def test_run_policy_check_returns_one_result_per_rule():
+    policy = PolicyConfig(rules=[ESCALATION_RULE, SLA_RULE])
+    clauses = [
+        Clause(
+            clause_type="price_escalation",
+            vendor_value=4,
+            source_section="4.1",
+            source_text="...4%...",
+            confidence=0.9,
+        ),
+    ]
+    results = run_policy_check(clauses, policy)
+    assert len(results) == 2
+    statuses = {r.clause_type: r.status for r in results}
+    assert statuses["price_escalation"] == CheckStatus.PASS
+    assert statuses["sla_uptime"] == CheckStatus.CANNOT_VERIFY
+
+
+def test_load_policy_config_from_data_file():
+    policy = load_policy_config()
+    assert isinstance(policy, PolicyConfig)
+    clause_types = {rule.clause_type for rule in policy.rules}
+    assert clause_types == {
+        "price_escalation",
+        "payment_terms_days",
+        "termination_notice_days",
+        "liability_cap",
+        "sla_uptime",
+        "data_ownership",
+        "auto_renewal_cancellation_window_days",
+    }
+
+
+def test_data_file_actually_exists():
+    assert (Path(__file__).resolve().parent.parent / "data" / "policy_config.json").exists()

@@ -204,3 +204,31 @@ left over, build the comparison mode before the other two stretch goals.
 **Consequences:** Legal-vs-Risk disagreement escalation and SQLite
 persistence may not get built at all in a 4-hour window. That is an
 accepted, explicit prioritization, not an oversight.
+
+---
+
+## ADR-010: Switch LLM provider from Gemini to OpenAI
+
+**Status:** Accepted
+
+**Context:** Earlier docs specified the Gemini API as the LLM provider.
+The team has an OpenAI API key available and ready to use, and no
+Gemini key in hand, which matters more under a 4-hour time limit than
+any difference in model quality between the two.
+
+**Decision:** Use the OpenAI API (`openai` Python package) everywhere an
+LLM call is needed, in place of Gemini. The model name is not hardcoded
+in agent logic — it lives in a single config constant, defaulting to
+`gpt-4o-mini` and overridable via the `OPENAI_MODEL` environment
+variable, so it can be swapped (e.g. to a larger model for the demo, or
+back to something cheaper for iteration) without touching agent code.
+The API key is read from `OPENAI_API_KEY` via a `.env` file, following
+`.env.example`; `.env` stays out of version control (already covered by
+`.gitignore`).
+
+**Consequences:** `requirements.txt` now pins `openai` instead of the
+Gemini SDK package. All prior references to Gemini in architecture.md
+and claude.md are updated to OpenAI. No agent has been written yet, so
+this switch costs nothing beyond doc and dependency updates — if it had
+come after agent code existed, every agent's LLM-call wrapper would have
+needed rewriting too.

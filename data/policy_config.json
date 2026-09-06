@@ -1,0 +1,55 @@
+{
+  "version": "v1",
+  "rules": [
+    {
+      "clause_type": "price_escalation",
+      "target_value": 3,
+      "hard_limit_value": 5,
+      "direction": "max",
+      "description": "Annual price escalation must not exceed the hard maximum of 5%; 3% is the preferred target."
+    },
+    {
+      "clause_type": "payment_terms_days",
+      "target_value": 60,
+      "hard_limit_value": 30,
+      "direction": "min",
+      "description": "Payment terms must be at least Net 30; Net 60 is the preferred target."
+    },
+    {
+      "clause_type": "termination_notice_days",
+      "target_value": 30,
+      "hard_limit_value": 60,
+      "direction": "max",
+      "description": "Termination notice period must not exceed 60 days; 30 days is the preferred target."
+    },
+    {
+      "clause_type": "liability_cap",
+      "target_value": "annual_contract_value",
+      "hard_limit_value": "annual_contract_value",
+      "direction": "min",
+      "description": "Vendor liability cap must be at least the contract's own annual contract value.",
+      "reference_clause_type": "annual_contract_value"
+    },
+    {
+      "clause_type": "sla_uptime",
+      "target_value": 99.9,
+      "hard_limit_value": 99.9,
+      "direction": "min",
+      "description": "SLA uptime must be at least 99.9%."
+    },
+    {
+      "clause_type": "data_ownership",
+      "target_value": "company",
+      "hard_limit_value": "company",
+      "direction": "equals",
+      "description": "Contract data must remain owned by the company, not the vendor."
+    },
+    {
+      "clause_type": "auto_renewal_cancellation_window_days",
+      "target_value": 30,
+      "hard_limit_value": 30,
+      "direction": "min",
+      "description": "Auto-renewal clauses must allow at least a 30-day cancellation window before renewal takes effect."
+    }
+  ]
+}

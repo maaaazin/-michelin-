@@ -28,9 +28,9 @@ python -m venv venv
 venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 
-# 3. set your Gemini API key
-copy .env.example .env       # not yet created
-# edit .env and set GEMINI_API_KEY=...
+# 3. set your OpenAI API key
+copy .env.example .env
+# edit .env and set OPENAI_API_KEY=...
 
 # 4. run the app
 streamlit run app/main.py    # not yet created

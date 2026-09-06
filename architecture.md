@@ -402,7 +402,7 @@ never something an agent call can rewrite.
 |---|---|
 | Language | Python |
 | Orchestration | LangGraph |
-| LLM | Gemini API |
+| LLM | OpenAI API (model set via one config constant, default `gpt-4o-mini`, override with `OPENAI_MODEL`) |
 | Document processing | PyMuPDF |
 | Validation / schemas | Pydantic |
 | Frontend | Streamlit (calls the graph directly, in-process) |

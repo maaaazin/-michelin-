@@ -1,0 +1,112 @@
+"""Company negotiation policy: structured rules and per-rule check results.
+
+No business logic lives here, just data. The comparisons that decide
+PASS / BLOCKED / CANNOT_VERIFY / LOW_CONFIDENCE / CONFLICTING live in
+harness/policy_gate.py, per the project rule that deterministic checks
+belong in code, not prompts - and structurally, not mixed into the
+schema layer either (see claude.md).
+"""
+
+from __future__ import annotations
+
+from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel, Field
+
+from .clause import ClauseValue
+
+
+class ComparisonDirection(str, Enum):
+    """How a rule's hard_limit_value bounds the vendor's value.
+
+    MAX    - lower is better for the company; hard_limit_value is a
+              ceiling the vendor's value must not exceed (e.g. price
+              escalation, termination notice period).
+    MIN    - higher is better for the company; hard_limit_value is a
+              floor the vendor's value must meet or exceed (e.g. SLA
+              uptime, payment terms, liability cap).
+    EQUALS - a categorical hard constraint; the vendor's value must
+              match hard_limit_value exactly (e.g. data ownership must
+              equal "company").
+    """
+
+    MAX = "max"
+    MIN = "min"
+    EQUALS = "equals"
+
+
+class PolicyRule(BaseModel):
+    """One company policy constraint for a single clause type."""
+
+    clause_type: str
+    target_value: ClauseValue = Field(
+        description="Company's preferred value. Informative only - never enforced by the gate."
+    )
+    hard_limit_value: ClauseValue = Field(
+        description=(
+            "The enforced boundary. For rules with reference_clause_type "
+            "set, this is a human-readable label for the boundary; its "
+            "actual numeric value is resolved dynamically from another "
+            "extracted clause at check time."
+        )
+    )
+    direction: ComparisonDirection
+    description: str = Field(description="Human-readable explanation of the rule.")
+    reference_clause_type: Optional[str] = Field(
+        default=None,
+        description=(
+            "If set, hard_limit_value is resolved dynamically from the "
+            "extracted Clause of this clause_type instead of being a fixed "
+            "constant. Used by liability_cap, whose floor is the contract's "
+            "own annual_contract_value, not a fixed number."
+        ),
+    )
+
+
+class PolicyConfig(BaseModel):
+    """The full set of company negotiation policy rules."""
+
+    version: str = "v1"
+    rules: List[PolicyRule] = Field(default_factory=list)
+
+
+class CheckStatus(str, Enum):
+    PASS = "PASS"
+    BLOCKED = "BLOCKED"
+    CANNOT_VERIFY = "CANNOT_VERIFY"
+    LOW_CONFIDENCE = "LOW_CONFIDENCE"
+    CONFLICTING = "CONFLICTING"
+
+
+class PolicyCheckResult(BaseModel):
+    """Outcome of checking one PolicyRule against extracted evidence
+    (and, once one exists, a proposed negotiation move).
+    """
+
+    clause_type: str
+    status: CheckStatus
+    checked_value: Optional[ClauseValue] = Field(
+        default=None,
+        description=(
+            "The value the rule was actually evaluated against. For "
+            "CONFLICTING this is the tie-broken value, not a literal "
+            "extracted fact - see requires_human_signoff. None when the "
+            "status is CANNOT_VERIFY or LOW_CONFIDENCE."
+        ),
+    )
+    target_value: Optional[ClauseValue] = None
+    hard_limit_value: Optional[ClauseValue] = None
+    reason: str
+    requires_human_signoff: bool = Field(
+        default=False,
+        description=(
+            "True for CONFLICTING results: a tie-break was applied "
+            "automatically for planning purposes, but a person must "
+            "confirm it before the final recommendation is treated as final."
+        ),
+    )
+    source_clauses: List[str] = Field(
+        default_factory=list,
+        description="clause_id values this result was derived from, for audit traceability.",
+    )
