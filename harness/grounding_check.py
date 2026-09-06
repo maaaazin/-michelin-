@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import re
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
-from schemas import Clause, NegotiationProposal
+from schemas import CheckStatus, Clause, NegotiationProposal, PolicyCheckResult
 
 
 class GroundingStatus(str, Enum):
@@ -30,10 +30,19 @@ class GroundingCheckResult(BaseModel):
     contradicted_clause_ids: List[str] = Field(default_factory=list)
 
 
-def check_grounding(proposal: NegotiationProposal, clauses: List[Clause]) -> GroundingCheckResult:
+def check_grounding(
+    proposal: NegotiationProposal,
+    clauses: List[Clause],
+    policy_results: Optional[List[PolicyCheckResult]] = None,
+) -> GroundingCheckResult:
     """Check that every clause_id in supporting_clauses exists, and that
     numbers in the rationale don't contradict a cited clause's own
     vendor_value (a substring/number heuristic, not exact parsing).
+
+    policy_results is optional, for backward compatibility; when given,
+    a CONFLICTING clause_type is also exempt from the number check - its
+    rationale mentions are the harness's own tie-broken value (ADR-007),
+    not a claim about what the clause itself literally states.
     """
     by_id = {c.clause_id: c for c in clauses if c.clause_id}
 
@@ -45,11 +54,20 @@ def check_grounding(proposal: NegotiationProposal, clauses: List[Clause]) -> Gro
             missing_clause_ids=missing,
         )
 
+    # A clause being proposed for change (a concessions/requested_changes
+    # key) is expected to discuss the new value, not restate the old one -
+    # only check number consistency for clauses cited as unchanging fact.
+    changing_types = set(proposal.concessions) | set(proposal.requested_changes)
+    if policy_results:
+        changing_types |= {r.clause_type for r in policy_results if r.status == CheckStatus.CONFLICTING}
     rationale_numbers = {float(n) for n in re.findall(r"-?\d+(?:\.\d+)?", proposal.rationale)}
     contradicted: List[str] = []
     if rationale_numbers:
         for cid in proposal.supporting_clauses:
-            value = by_id[cid].vendor_value
+            clause = by_id[cid]
+            if clause.clause_type in changing_types:
+                continue
+            value = clause.vendor_value
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 if float(value) not in rationale_numbers:
                     contradicted.append(cid)

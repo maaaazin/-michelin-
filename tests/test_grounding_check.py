@@ -3,7 +3,7 @@
 clause_id, and a rationale number that contradicts the cited clause.
 """
 
-from schemas import Clause, NegotiationProposal
+from schemas import CheckStatus, Clause, NegotiationProposal, PolicyCheckResult
 from harness.grounding_check import GroundingStatus, check_grounding
 
 ESCALATION_CLAUSE = Clause(
@@ -51,7 +51,9 @@ def test_unknown_clause_id_fails():
 
 
 def test_rationale_number_mismatch_fails():
-    # Cites the 8% clause but claims a different number in the rationale.
+    # Cites the 8% clause but claims a different number in the rationale,
+    # and it is not one of the proposal's own concessions/requested_changes -
+    # so this is a factual misstatement, not a description of a proposed change.
     proposal = NegotiationProposal(
         rationale="The vendor's stated 5% escalation is within an acceptable range.",
         supporting_clauses=["CL-001"],
@@ -59,3 +61,38 @@ def test_rationale_number_mismatch_fails():
     result = check_grounding(proposal, CLAUSES)
     assert result.status == GroundingStatus.GROUNDING_FAILED
     assert "CL-001" in result.contradicted_clause_ids
+
+
+def test_proposed_change_need_not_restate_the_original_value():
+    # requested_changes means the rationale is expected to discuss the
+    # NEW value (5), not restate the clause's original one (8) - this
+    # must pass even though "8" never appears in the rationale text.
+    proposal = NegotiationProposal(
+        requested_changes={"price_escalation": 5},
+        rationale="We propose reducing the escalation to the policy maximum of 5%.",
+        supporting_clauses=["CL-001"],
+    )
+    result = check_grounding(proposal, CLAUSES)
+    assert result.status == GroundingStatus.PASSED
+    assert result.contradicted_clause_ids == []
+
+
+def test_conflicting_clause_type_exempt_when_policy_results_given():
+    # price_escalation is CONFLICTING - acknowledging the harness's own
+    # tie-broken value (5) in the rationale, without it being a formal
+    # concession/requested_change, must not be flagged as a wrong fact.
+    proposal = NegotiationProposal(
+        rationale="Price escalation is conflicting; we accept the conservative 5% pending sign-off.",
+        supporting_clauses=["CL-001"],
+    )
+    policy_results = [
+        PolicyCheckResult(
+            clause_type="price_escalation",
+            status=CheckStatus.CONFLICTING,
+            reason="conflicting evidence",
+            requires_human_signoff=True,
+        )
+    ]
+    result = check_grounding(proposal, CLAUSES, policy_results)
+    assert result.status == GroundingStatus.PASSED
+    assert result.contradicted_clause_ids == []

@@ -20,6 +20,7 @@ class NegotiationStage(str, Enum):
     replan loop exceeds its attempt limit (harness/graph.py).
     """
 
+    POLICY_EXTRACTION = "POLICY_EXTRACTION"
     CONTRACT_ANALYSIS = "CONTRACT_ANALYSIS"
     POLICY_CHECK = "POLICY_CHECK"
     NEGOTIATION_PLANNING = "NEGOTIATION_PLANNING"
@@ -81,6 +82,13 @@ class NegotiationState(BaseModel):
     contract_text: Optional[str] = Field(
         default=None,
         description="Raw contract text for the graph's first node (Contract Analyst) to read.",
+    )
+    policy_text: Optional[str] = Field(
+        default=None,
+        description=(
+            "Raw company-policy document text, if one was uploaded. None means "
+            "use the constraints PolicyConfig as-is (the default_config.json path)."
+        ),
     )
     replan_count: int = Field(
         default=0,

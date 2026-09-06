@@ -1,8 +1,14 @@
 """LangGraph wiring for the full negotiation state machine
-(architecture.md Section 6): CONTRACT_ANALYSIS -> POLICY_CHECK ->
-NEGOTIATION_PLANNING -> RED_TEAM_REVIEW -> POLICY_GATE -> (PASS: FINAL
-| FAIL: REPLAN back to NEGOTIATION_PLANNING, capped at MAX_REPLANS,
-after which it escalates to HUMAN_REVIEW instead of looping forever).
+(architecture.md Section 6): POLICY_EXTRACTION -> CONTRACT_ANALYSIS ->
+POLICY_CHECK -> NEGOTIATION_PLANNING -> RED_TEAM_REVIEW -> POLICY_GATE
+-> (PASS: FINAL | FAIL: REPLAN back to NEGOTIATION_PLANNING, capped at
+MAX_REPLANS, after which it escalates to HUMAN_REVIEW instead of
+looping forever).
+
+POLICY_EXTRACTION always runs, but only acts when state.policy_text is
+set (a policy PDF was uploaded) - otherwise it just logs that the
+default data/policy_config.json is in use and leaves constraints
+untouched, so the no-PDF path is unchanged from before this node existed.
 
 Legal/Risk and Business/Finance run once, between POLICY_CHECK and the
 first NEGOTIATION_PLANNING - a replan loops policy_gate_final straight
@@ -24,6 +30,7 @@ from agents.business_finance import review_business_finance
 from agents.contract_analyst import extract_clauses
 from agents.legal_risk import review_legal_risk
 from agents.negotiation import negotiate
+from agents.policy_analyst import extract_policy
 from agents.red_team import review_red_team
 from harness.policy_gate import load_policy_config, run_policy_check
 from schemas import (
@@ -32,6 +39,7 @@ from schemas import (
     NegotiationStage,
     NegotiationState,
     PolicyConfig,
+    PolicyRuleSource,
     ReviewVerdict,
 )
 
@@ -58,6 +66,28 @@ def _gate_outcome(state: NegotiationState) -> tuple[bool, List[Any], Optional[Ag
     red_team_rejected = red_team is not None and red_team.verdict == ReviewVerdict.REJECT
     passed = not hard_fail and not red_team_rejected
     return passed, results, red_team
+
+
+def policy_extraction_node(state: NegotiationState) -> Dict[str, Any]:
+    if not state.policy_text:
+        return {
+            "current_state": NegotiationStage.POLICY_EXTRACTION,
+            "negotiation_history": state.negotiation_history
+            + [{"event": "Using default company policy (data/policy_config.json)."}],
+        }
+
+    new_config = extract_policy(state.policy_text, default_config=state.constraints)
+    extracted = [r.clause_type for r in new_config.rules if r.source == PolicyRuleSource.EXTRACTED]
+    fallback = [r.clause_type for r in new_config.rules if r.source == PolicyRuleSource.DEFAULT_FALLBACK]
+    line = f"Company policy loaded: {len(extracted)} rules extracted from document"
+    if fallback:
+        line += f", {len(fallback)} using default fallback (low confidence: {', '.join(fallback)})"
+    line += "."
+    return {
+        "constraints": new_config,
+        "current_state": NegotiationStage.POLICY_EXTRACTION,
+        "negotiation_history": state.negotiation_history + [{"event": line}],
+    }
 
 
 def contract_analysis_node(state: NegotiationState) -> Dict[str, Any]:
@@ -198,6 +228,7 @@ def build_graph():
     invoke/stream a graph with a caller-built initial state.
     """
     graph = StateGraph(NegotiationState)
+    graph.add_node("policy_extraction", policy_extraction_node)
     graph.add_node("contract_analysis", contract_analysis_node)
     graph.add_node("policy_check", policy_check_node)
     graph.add_node("initial_reviews", initial_reviews_node)
@@ -207,7 +238,8 @@ def build_graph():
     graph.add_node("finalize", finalize_node)
     graph.add_node("escalate", escalate_node)
 
-    graph.set_entry_point("contract_analysis")
+    graph.set_entry_point("policy_extraction")
+    graph.add_edge("policy_extraction", "contract_analysis")
     graph.add_edge("contract_analysis", "policy_check")
     graph.add_edge("policy_check", "initial_reviews")
     graph.add_edge("initial_reviews", "negotiation_planning")
@@ -229,9 +261,15 @@ def run_negotiation(
     negotiation_id: str = "NG-001",
     contract_id: str = "CTR-001",
     policy: Optional[PolicyConfig] = None,
+    policy_text: Optional[str] = None,
 ) -> NegotiationState:
     """One-shot entry point: build the initial state, run the compiled
     graph end to end, and return a typed NegotiationState.
+
+    policy_text, if given (raw text from an uploaded policy PDF), is
+    extracted by the graph's first node and merged onto `policy` (or
+    the default config) as the template; omit it for the original
+    default-JSON-only behavior, unchanged.
     """
     policy = policy or load_policy_config()
     initial_state = NegotiationState(
@@ -239,6 +277,7 @@ def run_negotiation(
         contract_id=contract_id,
         policy_version=policy.version,
         contract_text=contract_text,
+        policy_text=policy_text,
         constraints=policy,
     )
     result = build_graph().invoke(initial_state)

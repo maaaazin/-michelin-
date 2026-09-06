@@ -143,7 +143,7 @@ def negotiate(
             last_error = str(e)
             continue
 
-        grounding = check_grounding(proposal, clauses)
+        grounding = check_grounding(proposal, clauses, policy_results)
         if grounding.status != GroundingStatus.PASSED:
             last_error = f"grounding check failed: {grounding.reason}"
             continue
