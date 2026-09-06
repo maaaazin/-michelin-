@@ -1,4 +1,4 @@
-# Warden — Problem Statement
+# WinWin — Problem Statement
 
 *(Working title. Formerly drafted as "ContractGuard"; repo directory is
 currently `-michelin-`. See [decisions.md](decisions.md) ADR-001.)*
@@ -56,12 +56,12 @@ good the prompt is: the same call that proposes a move is the one that
 would have to police it, using policy rules held only in its context
 window and evidence it may or may not have actually read correctly. There
 is no independent check between "the model said so" and "the move is
-allowed." Warden's answer is to move enforcement out of the prompt and
+allowed." WinWin's answer is to move enforcement out of the prompt and
 into code that runs around the model.
 
 ## 2. Proposed Solution
 
-Warden is an agentic contract negotiation system built around a
+WinWin is an agentic contract negotiation system built around a
 deterministic harness.
 
 Specialized agents perform reasoning tasks:
@@ -100,7 +100,7 @@ A negotiation agent might propose:
 > "Accept 8% annual escalation in exchange for Net 60 payment terms."
 
 A traditional LLM workflow may accept this as a reasonable-sounding
-compromise. Warden intercepts it instead:
+compromise. WinWin intercepts it instead:
 
 ```
 POLICY GATE
@@ -124,7 +124,7 @@ User -> LLM -> Tools -> Answer
 
 The model is responsible for *both* reasoning about the task *and*
 following the rules governing the task. That coupling is the failure
-mode. Warden separates the two:
+mode. WinWin separates the two:
 
 | LLM does | Harness does |
 |---|---|
@@ -173,7 +173,7 @@ rejections, and concessions. Relying on conversational context alone
 gives no guarantee that every agent is reasoning from the same
 authoritative state.
 
-Warden's edge-case handling targets the sharpest versions of these
+WinWin's edge-case handling targets the sharpest versions of these
 directly (see [architecture.md](architecture.md) Section 6 and
 [failures.md](failures.md)):
 
@@ -237,10 +237,10 @@ Final negotiation recommendation + audit log
 
 ## 9. Hackathon Differentiation
 
-Contract analysis and "AI contract review" tools already exist. Warden is
+Contract analysis and "AI contract review" tools already exist. WinWin is
 differentiated by the execution harness, not the reading comprehension.
 
-Warden is not "an AI that reads contracts." It is a controlled environment
+WinWin is not "an AI that reads contracts." It is a controlled environment
 in which AI agents can negotiate contracts while the system independently
 enforces business boundaries, combining multi-agent reasoning,
 deterministic policy enforcement, evidence verification, independent
@@ -269,7 +269,7 @@ max 60 days, liability at least the annual contract value, SLA min 99.9%.
 B lets the vendor raise fees up to 15% at renewal.
 
 Run a traditional single-LLM baseline first, showing where the
-architecture has no structural enforcement. Then run Warden and show: the
+architecture has no structural enforcement. Then run WinWin and show: the
 negotiation agent proposes 8%, the policy gate blocks it, the system
 replans, red-team review runs, the policy gate passes, and a final
 approved proposal comes out, with the contradiction flagged for human
@@ -277,12 +277,12 @@ sign-off along the way.
 
 The point is not that a particular model will always fail. The point is
 that a traditional LLM workflow *relies* on the model behaving correctly,
-while Warden *structurally prevents* invalid actions from proceeding
+while WinWin *structurally prevents* invalid actions from proceeding
 regardless of what the model does.
 
 ## 12. Core Message
 
-> Warden lets AI negotiate vendor contracts, but puts every AI-generated
+> WinWin lets AI negotiate vendor contracts, but puts every AI-generated
 > negotiation move through an enforceable policy, evidence, and
 > independent-review harness before allowing it to proceed.
 

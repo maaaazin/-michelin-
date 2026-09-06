@@ -6,7 +6,7 @@ do not get lost inside architecture.md or decisions.md.
 
 ## Project identity
 
-- Working product name: **Warden**. Repo directory name is `-michelin-`
+- Working product name: **WinWin**. Repo directory name is `-michelin-`
   (predates the name) - do not let that block anything; see
   [decisions.md](decisions.md) ADR-001.
 - Domain: Operations & Compliance. Core idea: an LLM proposes negotiation

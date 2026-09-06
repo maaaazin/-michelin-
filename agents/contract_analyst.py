@@ -42,7 +42,7 @@ KNOWN_CLAUSE_TYPES = [
     "auto_renewal_cancellation_window_days",
 ]
 
-_SYSTEM_PROMPT = f"""You are the Contract Analyst agent in Warden, a vendor
+_SYSTEM_PROMPT = f"""You are the Contract Analyst agent in WinWin, a vendor
 contract negotiation harness. Extract structured evidence from the
 vendor contract text the user provides.
 

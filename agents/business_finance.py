@@ -17,7 +17,7 @@ from schemas import AgentReview, Clause, PolicyCheckResult, ReviewVerdict
 
 AGENT_NAME = "Business/Finance Agent"
 
-_SYSTEM_PROMPT = """You are the Business/Finance Agent in Warden, a vendor
+_SYSTEM_PROMPT = """You are the Business/Finance Agent in WinWin, a vendor
 contract negotiation harness. You independently assess business and
 financial impact across the extracted contract clauses and the
 deterministic policy check results given to you - you do not re-run

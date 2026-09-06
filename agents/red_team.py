@@ -18,7 +18,7 @@ from schemas import AgentReview, Clause, NegotiationProposal, PolicyCheckResult,
 
 AGENT_NAME = "Red-Team Agent"
 
-_SYSTEM_PROMPT = """You are the Red-Team Agent in Warden, a vendor contract
+_SYSTEM_PROMPT = """You are the Red-Team Agent in WinWin, a vendor contract
 negotiation harness. Your job is to independently challenge the
 Negotiation Agent's proposal, not rubber-stamp it - actively look for
 reasons to reject.

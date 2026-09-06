@@ -17,7 +17,7 @@ from schemas import AgentReview, Clause, PolicyCheckResult, ReviewVerdict
 
 AGENT_NAME = "Legal/Risk Agent"
 
-_SYSTEM_PROMPT = """You are the Legal/Risk Agent in Warden, a vendor contract
+_SYSTEM_PROMPT = """You are the Legal/Risk Agent in WinWin, a vendor contract
 negotiation harness. You independently assess legal and compliance risk
 across the extracted contract clauses and the deterministic policy
 check results given to you - you do not re-run those checks, you

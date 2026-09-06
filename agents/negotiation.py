@@ -23,7 +23,7 @@ from harness.config import OPENAI_MODEL
 from harness.grounding_check import GroundingStatus, check_grounding
 from schemas import AgentReview, Clause, ClauseValue, NegotiationProposal, PolicyCheckResult
 
-_SYSTEM_PROMPT = """You are the Negotiation Agent in Warden, a vendor contract
+_SYSTEM_PROMPT = """You are the Negotiation Agent in WinWin, a vendor contract
 negotiation harness. Propose a negotiation strategy using only the
 extracted clauses, policy check results, and the two independent agent
 reviews given to you below.

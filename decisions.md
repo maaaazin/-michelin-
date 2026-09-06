@@ -1,4 +1,4 @@
-# Warden — Decisions Log (ADR-style)
+# WinWin — Decisions Log (ADR-style)
 
 Each entry: Status, Context, Decision, Consequences. Numbered
 chronologically; do not renumber or delete old entries even if later ones
@@ -6,16 +6,16 @@ supersede them — mark them superseded instead.
 
 ---
 
-## ADR-001: Working project name is "Warden"
+## ADR-001: Working project name is "WinWin"
 
 **Status:** Accepted
 
 **Context:** The repo was seeded with docs drafted under the name
 "ContractGuard." The team's working title going into the build is
-"Warden." The GitHub repo directory itself is named `-michelin-` (a
+"WinWin." The GitHub repo directory itself is named `-michelin-` (a
 placeholder from repo creation) and has not been renamed.
 
-**Decision:** Use "Warden" as the product name in all docs and, once code
+**Decision:** Use "WinWin" as the product name in all docs and, once code
 exists, in the app UI and package names. Leave the GitHub repo directory
 name (`-michelin-`) alone for now — renaming a GitHub repo mid-hackathon
 is a distraction, not a blocker. Rename it later if a different name is
@@ -23,7 +23,7 @@ picked.
 
 **Consequences:** Older references to "ContractGuard" in commit history
 or early drafts are historical and not the current name. Anyone joining
-the repo should treat "Warden" as authoritative going forward.
+the repo should treat "WinWin" as authoritative going forward.
 
 ---
 
@@ -42,7 +42,7 @@ No API layer.
 
 **Consequences:** Simpler to run (one process, `streamlit run`), simpler
 to debug (no serialization boundary between UI and harness state), and
-fewer dependencies. If Warden ever needs a non-Streamlit client, an API
+fewer dependencies. If WinWin ever needs a non-Streamlit client, an API
 layer can be added later without changing the harness itself, since the
 graph is already a self-contained callable.
 
@@ -196,7 +196,7 @@ attention. That is an acceptable simplification for the core scope.
 side-by-side traditional-LLM comparison mode), the comparison mode has
 the highest demo value: it makes the harness's value visible in one
 screen, showing a naive workflow accept an out-of-policy proposal next
-to Warden blocking it.
+to WinWin blocking it.
 
 **Decision:** If the core loop and edge cases are complete with time
 left over, build the comparison mode before the other two stretch goals.

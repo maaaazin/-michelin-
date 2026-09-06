@@ -1,11 +1,11 @@
-# Warden — Architecture
+# WinWin — Architecture
 
 *(Working title. Formerly drafted as "ContractGuard"; repo directory is
 currently `-michelin-`. See [decisions.md](decisions.md) ADR-001.)*
 
 ## 1. Overview
 
-Warden is an agentic contract negotiation system where LLM agents propose
+WinWin is an agentic contract negotiation system where LLM agents propose
 analysis and negotiation moves, while a deterministic harness controls
 what those agents are allowed to do.
 
@@ -186,7 +186,7 @@ Company policy is structured data, not prose:
 
 ### 5.2 Policy Check vs. Policy Gate
 
-Warden's state machine (Section 6) has two distinct policy touchpoints
+WinWin's state machine (Section 6) has two distinct policy touchpoints
 that do different jobs:
 
 - **POLICY_CHECK** runs once, right after extraction, over the raw
@@ -441,7 +441,7 @@ demo if time allows (see ADR-009) — not a claim that any specific model
 will always fail, just a demonstration that the architecture has no
 structural enforcement.
 
-## 13. Warden Demonstration
+## 13. WinWin Demonstration
 
 ```
 Negotiation Agent proposes:
@@ -462,7 +462,7 @@ FINAL PROPOSAL APPROVED
 
 ## 14. Design Principle
 
-Warden is not trying to make an LLM perfectly reliable. It assumes the
+WinWin is not trying to make an LLM perfectly reliable. It assumes the
 LLM can fail and designs the execution environment to detect, contain,
 recover from, and escalate those failures. That is the central
 harness-engineering idea behind this project.

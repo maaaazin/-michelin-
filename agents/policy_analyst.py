@@ -50,7 +50,7 @@ _NUMERIC_RULE_TYPES = {
     "auto_renewal_cancellation_window_days",
 }
 
-_SYSTEM_PROMPT = f"""You are the Policy Analyst agent in Warden, a vendor
+_SYSTEM_PROMPT = f"""You are the Policy Analyst agent in WinWin, a vendor
 contract negotiation harness. Extract the company's negotiation policy
 from the policy document text the user provides, for exactly these rule
 types: {", ".join(KNOWN_RULE_TYPES)}.

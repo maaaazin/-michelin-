@@ -1,7 +1,7 @@
-# Warden — Failure Modes (why a harness, not a chatbot)
+# WinWin — Failure Modes (why a harness, not a chatbot)
 
 This document lists the specific ways a single-LLM contract-negotiation
-workflow fails silently, and the deterministic mechanism in Warden's
+workflow fails silently, and the deterministic mechanism in WinWin's
 harness that is designed to catch each one. If a failure mode here has no
 corresponding mechanism, that is a gap to close before calling the core
 build done.

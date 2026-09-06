@@ -14,7 +14,7 @@ from agents.policy_analyst import extract_policy
 from schemas import CheckStatus, NegotiationStage, PolicyRuleSource
 
 st.set_page_config(
-    page_title="Warden | Vendor Contract Negotiation",
+    page_title="WinWin | Vendor Contract Negotiation",
     page_icon="⚖️",
     layout="wide",
 )
@@ -24,9 +24,9 @@ css_path = Path(__file__).parent / "style.css"
 if css_path.exists():
     st.markdown(f"<style>{css_path.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
-st.title("⚖️ Warden")
+st.title("⚖️ WinWin")
 st.markdown(
-    "Warden lets AI negotiate vendor contracts, but puts every AI-generated "
+    "WinWin lets AI negotiate vendor contracts, but puts every AI-generated "
     "negotiation move through an enforceable policy, evidence, and "
     "independent-review harness before allowing it to proceed."
 )
@@ -61,7 +61,7 @@ with st.expander("⚙️ Uploads", expanded=st.session_state.final_state is None
 
     with col2:
         st.subheader("2. Company Policy (optional)")
-        st.caption("If omitted, Warden uses the default company policy (data/policy_config.json).")
+        st.caption("If omitted, WinWin uses the default company policy (data/policy_config.json).")
         policy_pdf = st.file_uploader("Upload the company policy document", type=["pdf"], key="policy_uploader")
         if policy_pdf is not None and policy_pdf is not st.session_state.policy_file:
             st.session_state.policy_file = policy_pdf
@@ -113,8 +113,8 @@ if not contract_ready:
 elif policy_gated:
     st.info("👆 Extract and confirm the company policy above before running the negotiation.")
 else:
-    if st.button("🚀 Run Warden", type="primary", use_container_width=True, disabled=not can_run):
-        with st.spinner("Running the Warden pipeline (contract analysis, policy check, reviews, negotiation, red-team, replan loop)..."):
+    if st.button("🚀 Run WinWin", type="primary", use_container_width=True, disabled=not can_run):
+        with st.spinner("Running the WinWin pipeline (contract analysis, policy check, reviews, negotiation, red-team, replan loop)..."):
             contract_text = _pdf_text(st.session_state.contract_file)
             effective_policy = st.session_state.extracted_policy or load_policy_config()
             try:
