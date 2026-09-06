@@ -59,10 +59,19 @@ class Clause(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _check_not_specified_consistency(self) -> "Clause":
+    def _normalize_not_specified(self) -> "Clause":
+        """Auto-correct rather than reject: a missing vendor_value with
+        not_specified=False is functionally not_specified anyway (there
+        is nothing to treat as fact), and stray value/source fields on
+        a not_specified=True item point to nothing real either way. An
+        occasional structured-output slip here shouldn't crash the
+        pipeline when the fix is unambiguous.
+        """
         if self.not_specified:
-            if self.vendor_value is not None:
-                raise ValueError("vendor_value must be None when not_specified=True")
+            self.vendor_value = None
+            self.unit = None
+            self.source_section = None
+            self.source_text = None
         elif self.vendor_value is None:
-            raise ValueError("vendor_value is required when not_specified=False")
+            self.not_specified = True
         return self

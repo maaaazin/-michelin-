@@ -6,13 +6,20 @@ schema-constrained before Clause's own validators even run.
 
 from __future__ import annotations
 
-from typing import List, Optional
+import re
+import warnings
+from typing import List, Optional, Set
 
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
 
 from harness.config import OPENAI_MODEL
 from schemas import Clause
+
+# Total attempts (1 initial + retries) before giving up on schema validity.
+MAX_ATTEMPTS = 3
+
+_CROSS_REF_PATTERN = re.compile(r"\b(Section\s+[\dA-Za-z.]+|Appendix\s+[A-Z]+)\b", re.IGNORECASE)
 
 # Clause types the policy engine governs (data/policy_config.json). The
 # model may also return others; those just aren't checked against policy.
@@ -70,15 +77,46 @@ class _ExtractedClauses(BaseModel):
 
 
 class ContractAnalystError(RuntimeError):
-    """Raised when the agent can't produce valid Clause data, even after one retry."""
+    """Raised when the agent can't produce valid Clause data, even after retrying."""
+
+
+def _describe_validation_error(error: ValidationError) -> str:
+    """Turn a Clause ValidationError into a per-field description for
+    the retry prompt. The not_specified/vendor_value pairing is now
+    auto-normalized in the schema itself (schemas/clause.py), not
+    raised, so this only fires for genuine shape errors (bad type,
+    out-of-range confidence, a missing required field).
+    """
+    parts = [f"At {'.'.join(str(p) for p in err['loc'])}: {err['msg']}" for err in error.errors()]
+    return " ".join(parts)
+
+
+def _find_unaddressed_cross_references(clauses: List[Clause]) -> List[str]:
+    """Find Section/Appendix references inside source_text that were
+    never themselves used as a source_section - a sign the model named
+    a cross-reference but never actually went and extracted it.
+    """
+    covered: Set[str] = {c.source_section.strip().lower() for c in clauses if c.source_section}
+    referenced: Set[str] = set()
+    for clause in clauses:
+        if not clause.source_text:
+            continue
+        for match in _CROSS_REF_PATTERN.findall(clause.source_text):
+            if match.strip().lower() not in covered:
+                referenced.add(match.strip())
+    return sorted(referenced)
 
 
 def extract_clauses(contract_text: str, client: Optional[OpenAI] = None) -> List[Clause]:
     """Extract structured Clause evidence from raw contract text.
 
-    Validates every item against the Clause schema. On a validation
-    failure, retries once with the error fed back to the model, then
-    raises ContractAnalystError rather than silently dropping a clause.
+    Validates every item against the Clause schema and retries with a
+    specific corrective message on failure. Also checks that every
+    Section/Appendix a clause's source_text references was itself
+    extracted; if not, retries with that gap named too. Raises
+    ContractAnalystError only on a genuine schema failure after
+    MAX_ATTEMPTS - an unresolved cross-reference after all attempts is
+    logged as a warning and returned as best-effort, not fatal.
     """
     client = client or OpenAI()
     messages = [
@@ -87,15 +125,12 @@ def extract_clauses(contract_text: str, client: Optional[OpenAI] = None) -> List
     ]
 
     last_error: Optional[str] = None
-    for _ in range(2):
+    for attempt in range(MAX_ATTEMPTS):
         if last_error:
             messages.append(
                 {
                     "role": "user",
-                    "content": (
-                        f"Your previous output was invalid: {last_error}. "
-                        "Return corrected structured output."
-                    ),
+                    "content": f"Your previous output was invalid: {last_error} Return corrected structured output.",
                 }
             )
         try:
@@ -110,8 +145,23 @@ def extract_clauses(contract_text: str, client: Optional[OpenAI] = None) -> List
                 continue
             clauses = list(message.parsed.clauses)
         except ValidationError as e:
-            last_error = str(e)
+            last_error = _describe_validation_error(e)
             continue
+
+        missing_refs = _find_unaddressed_cross_references(clauses)
+        if missing_refs and attempt < MAX_ATTEMPTS - 1:
+            last_error = (
+                f"Your source_text mentions {missing_refs} but no clause entry has "
+                f"one of those as its own source_section. Go read those passages "
+                "and add the missing entries - don't just cite them in passing."
+            )
+            continue
+        if missing_refs:
+            warnings.warn(
+                f"Contract Analyst: cross-references left unaddressed after "
+                f"{MAX_ATTEMPTS} attempts: {missing_refs}",
+                stacklevel=2,
+            )
 
         for i, clause in enumerate(clauses, start=1):
             if not clause.clause_id:
@@ -119,5 +169,5 @@ def extract_clauses(contract_text: str, client: Optional[OpenAI] = None) -> List
         return clauses
 
     raise ContractAnalystError(
-        f"Contract Analyst produced invalid Clause data after retry: {last_error}"
+        f"Contract Analyst produced invalid Clause data after {MAX_ATTEMPTS} attempts: {last_error}"
     )
