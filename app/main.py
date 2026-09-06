@@ -93,7 +93,10 @@ with col2:
     policy_pdf = st.file_uploader(
         "Upload the company policy document", type=["pdf"], key="policy_uploader", label_visibility="collapsed"
     )
-    if policy_pdf is not None and policy_pdf is not st.session_state.policy_file:
+    # != (not "is not"): Streamlit returns a new UploadedFile object every
+    # rerun even for the same upload, but UploadedFile.__eq__ compares
+    # file_id - "is not" would reset extracted_policy on every rerun.
+    if policy_pdf is not None and policy_pdf != st.session_state.policy_file:
         st.session_state.policy_file = policy_pdf
         st.session_state.extracted_policy = None
         st.session_state.policy_confirmed = False
