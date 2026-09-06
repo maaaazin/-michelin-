@@ -1,0 +1,104 @@
+/* WinWin Corporate Light Theme */
+
+/* General Background and Typography */
+.stApp {
+    background-color: #FAFAFA;
+    font-family: 'Inter', 'Roboto', sans-serif;
+    color: #1E293B;
+}
+
+/* Hide Streamlit branding elements */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+
+/* Style the top header and text */
+h1, h2, h3, h4, h5, h6 {
+    color: #0F172A;
+    font-weight: 600;
+}
+
+/* Metric Cards */
+[data-testid="stMetricValue"] {
+    font-size: 2rem !important;
+    font-weight: 700;
+    color: #0369A1; /* Professional Blue */
+}
+[data-testid="stMetricLabel"] {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Expander styling */
+.streamlit-expanderHeader {
+    background-color: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 6px;
+    font-weight: 500;
+    color: #0F172A;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 2rem;
+}
+.stTabs [data-baseweb="tab"] {
+    height: 3rem;
+    white-space: pre-wrap;
+    background-color: transparent;
+    border-radius: 4px 4px 0px 0px;
+    gap: 1rem;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    color: #475569;
+}
+.stTabs [aria-selected="true"] {
+    color: #0369A1 !important;
+    border-bottom: 3px solid #0369A1 !important;
+    font-weight: 600;
+}
+
+/* Buttons */
+.stButton > button {
+    background-color: #0369A1;
+    color: white;
+    font-weight: 600;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    transition: all 0.2s ease-in-out;
+}
+.stButton > button:hover {
+    background-color: #0284C7;
+    border-color: #0284C7;
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+}
+
+/* Dataframe formatting */
+.dataframe {
+    border-collapse: collapse;
+    width: 100%;
+}
+.dataframe th {
+    background-color: #F8FAFC;
+    color: #475569;
+    font-weight: 600;
+    text-align: left;
+    padding: 12px;
+    border-bottom: 2px solid #E2E8F0;
+}
+.dataframe td {
+    padding: 12px;
+    border-bottom: 1px solid #E2E8F0;
+    color: #1E293B;
+}
+
+/* Success/Error Alerts styling overrides if needed, using defaults for now but ensuring they look clean */
+div[data-baseweb="notification"] {
+    border-radius: 6px;
+}
