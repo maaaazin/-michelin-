@@ -4,6 +4,7 @@ from .business_finance import BusinessFinanceAgentError, review_business_finance
 from .contract_analyst import ContractAnalystError, KNOWN_CLAUSE_TYPES, extract_clauses
 from .legal_risk import LegalRiskAgentError, review_legal_risk
 from .negotiation import NegotiationAgentError, negotiate
+from .red_team import RedTeamAgentError, review_red_team
 
 __all__ = [
     "extract_clauses",
@@ -15,4 +16,6 @@ __all__ = [
     "BusinessFinanceAgentError",
     "negotiate",
     "NegotiationAgentError",
+    "review_red_team",
+    "RedTeamAgentError",
 ]

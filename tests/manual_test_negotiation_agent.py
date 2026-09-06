@@ -1,7 +1,7 @@
 """Standalone (non-pytest) manual check of the full real pipeline:
 Contract Analyst -> policy_gate -> Legal/Risk + Business/Finance ->
-Negotiation Agent -> grounding_check, all live API calls against the
-same sample contract used by the other manual tests. Run:
+Negotiation Agent -> grounding_check -> Red-Team, all live API calls
+against the same sample contract used by the other manual tests. Run:
 
     python tests/manual_test_negotiation_agent.py
 """
@@ -18,6 +18,7 @@ from agents.business_finance import review_business_finance  # noqa: E402
 from agents.contract_analyst import extract_clauses  # noqa: E402
 from agents.legal_risk import review_legal_risk  # noqa: E402
 from agents.negotiation import negotiate  # noqa: E402
+from agents.red_team import review_red_team  # noqa: E402
 from harness import load_policy_config, run_policy_check  # noqa: E402
 from harness.grounding_check import GroundingStatus, check_grounding  # noqa: E402
 from manual_test_contract_analyst import SAMPLE_CONTRACT  # noqa: E402
@@ -57,7 +58,11 @@ def main() -> int:
     if grounding.status != GroundingStatus.PASSED:
         print("\n*** GROUNDING CHECK FAILED - see above ***")
         return 1
-    print("\nGrounding check passed.")
+    print("\nGrounding check passed.\n")
+
+    print("Step 7: Red-Team Agent...")
+    red_team_review = review_red_team(proposal, clauses, results, legal_review, business_review)
+    print(red_team_review.model_dump_json(indent=2))
     return 0
 
 
