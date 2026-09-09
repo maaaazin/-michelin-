@@ -147,8 +147,8 @@ assets/     Logo and other static assets
 
 ```bash
 # 1. clone and enter the repo
-git clone <repo-url>
-cd -michelin-
+git clone https://github.com/maaaazin/WinWin
+cd WinWin
 
 # 2. create a virtualenv and install dependencies
 python -m venv venv
@@ -177,28 +177,6 @@ hand-written fixtures with no live API calls. The `tests/manual_test_*.py`
 scripts exercise real agents against the live OpenAI API and the PDFs in
 `test_docs/`; run them directly (e.g. `python tests/manual_test_real_pdfs.py`)
 rather than via `pytest`.
-
-## Team
-
-**Vibecoder 1: Ahmad + Claude Code**
-*Focus: Full-Stack Negotiation Logic, Red-Teaming, and Outcome UI*
-
-Built the end-to-end negotiation lifecycle across the entire stack. On the
-backend: the core Negotiation Agent, independent Red-Team review logic, and
-the LangGraph state machine and replan loop for rejected proposals. On the
-frontend: the dynamic Streamlit UI rendering the interactive Audit Trail
-and the final Outcome state, connecting the graph's terminal outputs
-directly to the user's screen.
-
-**Vibecoder 2: Maazin + Antigravity**
-*Focus: Full-Stack Data Extraction, Deterministic Gates, and Upload UI*
-
-Owned the strict data extraction and rule enforcement layer. On the
-backend: the deterministic policy_gate and grounding_check to
-mathematically prevent AI hallucinations, plus the Contract Analyst and
-Policy Analyst agents. On the frontend: the PDF upload pipeline and the
-interactive policy extraction UI, forcing humans to confirm LLM-extracted
-rules before negotiation runs.
 
 ## Project Docs
 
